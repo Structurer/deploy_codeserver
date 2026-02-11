@@ -56,7 +56,7 @@ curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codeserver/main/d
 
 部署完成后，您可以通过以下地址访问 code Server：
 
-- **自定义域名**：https://[子域名].[主域名]（例如：https://code.example.com）
+- **自定义域名**：https://[子域名].[主域名]（ 例如：https://code.example.com ）
 - **Cloudflare Tunnel 默认地址**：https://[tunnel-id].cfargotunnel.com
 
 ## 注意事项
