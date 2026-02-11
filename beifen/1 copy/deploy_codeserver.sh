@@ -116,54 +116,28 @@ check_and_handle_dpkg_lock
 dpkg -i cloudflared.deb
 rm -f cloudflared.deb
 
-echo "" 
+echo ""
 echo "7. Cloudflare 账户授权..."
-echo "请选择授权方式："
-echo "1. 在线授权（通过浏览器链接）"
-echo "2. 使用 API Token 授权"
-read -p "请输入选择 (1/2): " auth_method
-
-if [ "$auth_method" = "1" ]; then
-    # 在线授权方式
-    if [ -f "$HOME/.cloudflared/cert.pem" ]; then
-        echo "检测到已存在的 Cloudflare 证书，将覆盖现有证书"
+if [ -f "$HOME/.cloudflared/cert.pem" ]; then
+    echo "检测到已存在的 Cloudflare 证书"
+    echo "请选择操作："
+    echo "1. 使用现有证书"
+    echo "2. 重新授权（覆盖现有证书）"
+    read -p "请输入选择 (1/2): " cert_choice
+    
+    if [ "$cert_choice" = "2" ]; then
+        echo "正在删除现有证书..."
         rm -f "$HOME/.cloudflared/cert.pem"
+        echo "请在浏览器中打开以下URL并登录Cloudflare账户授权："
+        echo "授权完成后，按回车键继续..."
+        cloudflared tunnel login
+    else
+        echo "使用现有证书"
     fi
+else
     echo "请在浏览器中打开以下URL并登录Cloudflare账户授权："
     echo "授权完成后，按回车键继续..."
     cloudflared tunnel login
-elif [ "$auth_method" = "2" ]; then
-    # API Token 授权方式
-    echo "请输入 Cloudflare API Token："
-    read -s CLOUDFLARE_API_TOKEN
-    echo ""
-    
-    echo "正在使用 API Token 授权..."
-    
-    # 创建临时配置文件
-    mkdir -p "$HOME/.cloudflared"
-    
-    # 尝试使用 API Token 执行操作
-    # 首先创建一个测试隧道来验证 Token
-    TEST_TUNNEL_NAME="test-token-auth-$(date +%s)"
-    TEST_RESULT=$(CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" cloudflared tunnel create $TEST_TUNNEL_NAME 2>&1)
-    
-    if echo "$TEST_RESULT" | grep -q "Created tunnel"; then
-        echo "API Token 授权成功！"
-        # 清理测试隧道
-        TEST_TUNNEL_ID=$(echo "$TEST_RESULT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
-        if [ ! -z "$TEST_TUNNEL_ID" ]; then
-            CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" cloudflared tunnel delete $TEST_TUNNEL_ID 2>&1 || true
-        fi
-        echo "授权完成！"
-    else
-        echo "错误：API Token 验证失败，请检查 Token 是否正确"
-        echo "错误信息：$TEST_RESULT"
-        exit 1
-    fi
-else
-    echo "错误：无效的选择，请重新执行脚本"
-    exit 1
 fi
 
 echo ""

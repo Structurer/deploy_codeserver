@@ -8,9 +8,9 @@ set -e
 
 # 处理 dpkg 锁文件的函数
 check_and_handle_dpkg_lock() {
-    echo "检查 dpkg 锁状态..."
+    echo "Checking dpkg lock status..."
     if [ -f "/var/lib/dpkg/lock" ] || [ -f "/var/lib/dpkg/lock-frontend" ]; then
-        echo "检测到 dpkg 锁文件，尝试释放..."
+        echo "Detected dpkg lock files, attempting to release..."
         # 尝试终止占用锁的进程
         sudo fuser -vki -TERM /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend 2>/dev/null || true
         # 完成未完成的配置
@@ -22,65 +22,65 @@ check_and_handle_dpkg_lock() {
 
 # 检查并重启 code-server 服务的函数
 restart_code_server() {
-    echo "检查 code-server 服务状态..."
+    echo "Checking code-server service status..."
     # 检查服务是否存在
     if systemctl list-unit-files | grep -q code-server@.service; then
-        echo "重启 code-server 服务以应用新配置..."
+        echo "Restarting code-server service to apply new configuration..."
         systemctl restart code-server@root 2>/dev/null || systemctl start code-server@root
         sleep 2
         # 检查服务状态
         systemctl status code-server@root --no-pager
     else
-        echo "code-server 服务尚未安装，跳过重启操作..."
+        echo "code-server service not yet installed, skipping restart operation..."
     fi
 }
 
 echo ""
-echo "=== 开始部署 code Server + Cloudflare Tunnel ==="
+echo "=== Starting code Server + Cloudflare Tunnel Deployment ==="
 
 echo ""
-echo "0. 系统更新选项..."
-echo "系统更新可能需要较长时间，是否跳过？"
-echo "1. 执行系统更新（推荐，确保系统包最新）"
-echo "2. 跳过系统更新（快速部署，使用现有包）"
-read -p "请输入选择 (1/2): " update_choice
+echo "0. System update option..."
+echo "System update may take a long time, skip?"
+echo "1. Execute system update (recommended, ensure latest packages)"
+echo "2. Skip system update (fast deployment, use existing packages)"
+read -p "Please enter your choice (1/2): " update_choice
 
 if [ "$update_choice" = "1" ]; then
     echo ""
-echo "1. 更新系统包..."
+echo "1. Updating system packages..."
     check_and_handle_dpkg_lock
     apt update && apt upgrade -y
 else
     echo ""
-echo "1. 跳过系统更新..."
+echo "1. Skipping system update..."
 fi
 
 echo ""
-echo "2. 安装必要依赖..."
+echo "2. Installing necessary dependencies..."
 check_and_handle_dpkg_lock
 apt install -y curl
 
 echo ""
-echo "3. 安装 code Server..."
+echo "3. Installing code Server..."
 curl -fsSL https://code-server.dev/install.sh | sh
 
-echo "" 
-echo "4. 配置 code Server..."
+echo ""
+echo "4. Configuring code Server..."
 
 # 密码输入循环，直到两次输入一致
 while true; do
-    echo "请输入 code Server 的登录密码："
+    echo "Please enter code Server login password:"
     read -s CODESERVER_PASSWORD
     echo ""
-    echo "确认密码："
+    echo "Confirm password:"
     read -s CODESERVER_PASSWORD_CONFIRM
     echo ""
     
     if [ "$CODESERVER_PASSWORD" = "$CODESERVER_PASSWORD_CONFIRM" ]; then
-        echo "密码确认成功！"
+        echo "Password confirmed successfully!"
         break
     else
-        echo "错误：两次输入的密码不一致，请重新输入"
+        echo "Error: Passwords do not match, please re-enter"
         echo ""
     fi
 done
@@ -94,119 +94,93 @@ auth: password
 password: $CODESERVER_PASSWORD
 cert: false
 EOF
-    echo "配置文件已创建"
+    echo "Configuration file created"
 else
     sed -i "s/password: .*/password: $CODESERVER_PASSWORD/" /root/.config/code-server/config.yaml
-    echo "密码已更新"
+    echo "Password updated"
 fi
 
 echo ""
-echo "5. 启动并启用 code Server 服务..."
+echo "5. Starting and enabling code Server service..."
 systemctl enable --now code-server@root
 # 重启服务以确保密码生效
 restart_code_server
 
 echo ""
-echo "=== code Server 部署完成 ==="
+echo "=== code Server deployment completed ==="
 
 echo ""
-echo "6. 安装 Cloudflare Tunnel 客户端..."
+echo "6. Installing Cloudflare Tunnel client..."
 curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
 check_and_handle_dpkg_lock
 dpkg -i cloudflared.deb
 rm -f cloudflared.deb
 
-echo "" 
-echo "7. Cloudflare 账户授权..."
-echo "请选择授权方式："
-echo "1. 在线授权（通过浏览器链接）"
-echo "2. 使用 API Token 授权"
-read -p "请输入选择 (1/2): " auth_method
-
-if [ "$auth_method" = "1" ]; then
-    # 在线授权方式
-    if [ -f "$HOME/.cloudflared/cert.pem" ]; then
-        echo "检测到已存在的 Cloudflare 证书，将覆盖现有证书"
+echo ""
+echo "7. Cloudflare account authorization..."
+if [ -f "$HOME/.cloudflared/cert.pem" ]; then
+    echo "Detected existing Cloudflare certificate"
+    echo "Please select operation:"
+    echo "1. Use existing certificate"
+    echo "2. Re-authorize (overwrite existing certificate)"
+    read -p "Please enter your choice (1/2): " cert_choice
+    
+    if [ "$cert_choice" = "2" ]; then
+        echo "Deleting existing certificate..."
         rm -f "$HOME/.cloudflared/cert.pem"
-    fi
-    echo "请在浏览器中打开以下URL并登录Cloudflare账户授权："
-    echo "授权完成后，按回车键继续..."
-    cloudflared tunnel login
-elif [ "$auth_method" = "2" ]; then
-    # API Token 授权方式
-    echo "请输入 Cloudflare API Token："
-    read -s CLOUDFLARE_API_TOKEN
-    echo ""
-    
-    echo "正在使用 API Token 授权..."
-    
-    # 创建临时配置文件
-    mkdir -p "$HOME/.cloudflared"
-    
-    # 尝试使用 API Token 执行操作
-    # 首先创建一个测试隧道来验证 Token
-    TEST_TUNNEL_NAME="test-token-auth-$(date +%s)"
-    TEST_RESULT=$(CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" cloudflared tunnel create $TEST_TUNNEL_NAME 2>&1)
-    
-    if echo "$TEST_RESULT" | grep -q "Created tunnel"; then
-        echo "API Token 授权成功！"
-        # 清理测试隧道
-        TEST_TUNNEL_ID=$(echo "$TEST_RESULT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
-        if [ ! -z "$TEST_TUNNEL_ID" ]; then
-            CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" cloudflared tunnel delete $TEST_TUNNEL_ID 2>&1 || true
-        fi
-        echo "授权完成！"
+        echo "Please open the following URL in your browser and login to Cloudflare account to authorize:"
+        echo "After authorization is complete, press Enter to continue..."
+        cloudflared tunnel login
     else
-        echo "错误：API Token 验证失败，请检查 Token 是否正确"
-        echo "错误信息：$TEST_RESULT"
-        exit 1
+        echo "Using existing certificate"
     fi
 else
-    echo "错误：无效的选择，请重新执行脚本"
-    exit 1
+    echo "Please open the following URL in your browser and login to Cloudflare account to authorize:"
+    echo "After authorization is complete, press Enter to continue..."
+    cloudflared tunnel login
 fi
 
 echo ""
-echo "8. 验证 Cloudflare 授权..."
+echo "8. Verifying Cloudflare authorization..."
 if [ ! -f "$HOME/.cloudflared/cert.pem" ]; then
-    echo "错误：Cloudflare 授权失败，请重新执行授权步骤"
+    echo "Error: Cloudflare authorization failed, please re-execute the authorization step"
     exit 1
 fi
-echo "Cloudflare 授权成功！"
+echo "Cloudflare authorization successful!"
 
 echo ""
-echo "9. 配置完整域名..."
-echo "请输入您要使用的完整域名（如 code.example.com）："
-read -p "完整域名: " FULL_DOMAIN
+echo "9. Configuring full domain name..."
+echo "Please enter the full domain name you want to use (e.g., code.example.com):"
+read -p "Full domain name: " FULL_DOMAIN
 
 if [ -z "$FULL_DOMAIN" ]; then
-    echo "错误：域名不能为空"
+    echo "Error: Domain name cannot be empty"
     exit 1
 fi
 
-echo "使用的域名: $FULL_DOMAIN"
+echo "Using domain: $FULL_DOMAIN"
 
 echo ""
-echo "11. 创建 Cloudflare Tunnel..."
+echo "11. Creating Cloudflare Tunnel..."
 TUNNEL_NAME="codeserver-tunnel"
 TUNNEL_ID=""
 
-echo "正在尝试创建 tunnel '$TUNNEL_NAME'..."
-TUNNEL_CREATION_OUTPUT=$(cloudflared tunnel create $TUNNEL_NAME 2>&1 || echo "命令执行失败: $?")
-echo "创建命令输出: $TUNNEL_CREATION_OUTPUT"
+echo "Attempting to create tunnel '$TUNNEL_NAME'..."
+TUNNEL_CREATION_OUTPUT=$(cloudflared tunnel create $TUNNEL_NAME 2>&1 || echo "Command execution failed: $?")
+echo "Creation command output: $TUNNEL_CREATION_OUTPUT"
 
 TUNNEL_ID=$(echo "$TUNNEL_CREATION_OUTPUT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
-echo "提取到的 Tunnel ID: '$TUNNEL_ID'"
+echo "Extracted Tunnel ID: '$TUNNEL_ID'"
 
 if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with name already exists"; then
-    echo "检测到 tunnel '$TUNNEL_NAME' 已存在"
-    echo "请选择操作："
-    echo "1. 使用现有 tunnel"
-    echo "2. 创建新名称的 tunnel"
-    read -p "请输入选择 (1/2): " tunnel_choice
+    echo "Detected tunnel '$TUNNEL_NAME' already exists"
+    echo "Please select operation:"
+    echo "1. Use existing tunnel"
+    echo "2. Create tunnel with new name"
+    read -p "Please enter your choice (1/2): " tunnel_choice
     
     if [ "$tunnel_choice" = "1" ]; then
-        echo "正在获取现有 tunnel 列表..."
+        echo "Fetching existing tunnel list..."
         
         # 循环尝试获取 tunnel 列表，最多尝试3次
         MAX_RETRIES=3
@@ -222,11 +196,11 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
                 if echo "$TUNNEL_LIST" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
                     break
                 else
-                    echo "警告：获取到的 tunnel 列表格式异常，尝试重新授权..."
+                    echo "Warning: Obtained tunnel list format is abnormal, attempting to re-authorize..."
                 fi
             else
-                echo "错误：无法获取 tunnel 列表，错误信息：$TUNNEL_LIST"
-                echo "尝试重新授权..."
+                echo "Error: Failed to fetch tunnel list, error message: $TUNNEL_LIST"
+                echo "Attempting to re-authorize..."
             fi
             
             # 重新授权
@@ -234,23 +208,23 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
             RETRY_COUNT=$((RETRY_COUNT + 1))
             
             if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                echo "重新尝试获取 tunnel 列表..."
+                echo "Retrying to fetch tunnel list..."
             fi
         done
         
         # 检查是否成功获取到 tunnel 列表
         if [ -z "$TUNNEL_LIST" ] || ! echo "$TUNNEL_LIST" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
-            echo "错误：无法获取有效的 tunnel 列表，请稍后重试"
+            echo "Error: Failed to fetch valid tunnel list, please try again later"
             exit 1
         fi
         
-        echo "调试信息：获取到的 tunnel 列表内容："
+        echo "Debug info: Obtained tunnel list content:"
         echo "$TUNNEL_LIST"
         echo "---------------------------------------------------------------"
         
         # 解析 tunnel 列表并显示带序号的选项
-        echo "\n现有 tunnel 列表："
-        echo "序号  ID                                   NAME              CREATED"
+        echo "\nExisting tunnel list:"
+        echo "No.  ID                                   NAME              CREATED"
         echo "---------------------------------------------------------------"
         
         # 将 tunnel 信息解析为数组
@@ -274,12 +248,12 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
         
         # 检查是否有 tunnel 可用
         if [ ${#TUNNEL_ITEMS[@]} -eq 0 ]; then
-            echo "错误：未找到任何现有 tunnel，请选择创建新 tunnel"
+            echo "Error: No existing tunnels found, please choose to create a new tunnel"
             exit 1
         fi
         
         # 让用户选择 tunnel
-        read -p "\n请输入要使用的 tunnel 序号：" tunnel_index
+        read -p "\nPlease enter the tunnel number to use: " tunnel_index
         
         # 验证输入
         if [[ "$tunnel_index" =~ ^[0-9]+$ ]] && [ "$tunnel_index" -ge 1 ] && [ "$tunnel_index" -le "${#TUNNEL_ITEMS[@]}" ]; then
@@ -289,93 +263,93 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
             TUNNEL_ID=$(echo "$selected_tunnel" | awk '{print $1}')
             TUNNEL_NAME=$(echo "$selected_tunnel" | awk '{print $2}')
             
-            echo "\n您选择的 tunnel："
+            echo "\nYour selected tunnel:"
             echo "ID: $TUNNEL_ID"
-            echo "名称: $TUNNEL_NAME"
+            echo "Name: $TUNNEL_NAME"
             
             # 检查本地是否存在凭据文件
             CREDENTIALS_FILE="/root/.cloudflared/$TUNNEL_ID.json"
-            echo "调试信息：检查凭据文件路径：$CREDENTIALS_FILE"
+            echo "Debug info: Checking credentials file path: $CREDENTIALS_FILE"
             
             if [ ! -f "$CREDENTIALS_FILE" ]; then
-                echo "\n检测到本地缺少该 tunnel 的凭据文件"
-                echo "执行方案：删除现有 tunnel 并重新创建，以获取新的凭据文件..."
+                echo "\nDetected missing credentials file for this tunnel"
+                echo "Executing solution: Delete existing tunnel and recreate to obtain new credentials..."
                 
                 # 删除现有 tunnel
-                echo "正在删除现有 tunnel '$TUNNEL_NAME'..."
+                echo "Deleting existing tunnel '$TUNNEL_NAME'..."
                 DELETE_RESULT=$(cloudflared tunnel delete $TUNNEL_ID 2>&1)
-                echo "删除 tunnel 结果：$DELETE_RESULT"
+                echo "Tunnel deletion result: $DELETE_RESULT"
                 
                 # 重新创建相同名称的 tunnel
-                echo "正在重新创建 tunnel '$TUNNEL_NAME'..."
+                echo "Recreating tunnel '$TUNNEL_NAME'..."
                 CREATE_RESULT=$(cloudflared tunnel create $TUNNEL_NAME 2>&1)
-                echo "创建 tunnel 结果：$CREATE_RESULT"
+                echo "Tunnel creation result: $CREATE_RESULT"
                 
                 # 提取新的 tunnel ID
                 NEW_TUNNEL_ID=$(echo "$CREATE_RESULT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
                 
                 if [[ "$NEW_TUNNEL_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
-                    echo "成功重新创建 tunnel，新 ID: $NEW_TUNNEL_ID"
+                    echo "Successfully recreated tunnel, new ID: $NEW_TUNNEL_ID"
                     # 更新 TUNNEL_ID 变量
                     TUNNEL_ID="$NEW_TUNNEL_ID"
                     # 更新凭据文件路径
                     CREDENTIALS_FILE="/root/.cloudflared/$TUNNEL_ID.json"
-                    echo "调试信息：新的凭据文件路径：$CREDENTIALS_FILE"
+                    echo "Debug info: New credentials file path: $CREDENTIALS_FILE"
                     
                     # 检查新的凭据文件是否生成
                     if [ -f "$CREDENTIALS_FILE" ]; then
-                        echo "成功获取新的 tunnel 凭据文件"
+                        echo "Successfully obtained new tunnel credentials"
                     else
-                        echo "错误：重新创建 tunnel 后仍未生成凭据文件"
+                        echo "Error: Credentials file not generated after recreating tunnel"
                         exit 1
                     fi
                 else
-                    echo "错误：重新创建 tunnel 失败"
-                    echo "创建输出：$CREATE_RESULT"
+                    echo "Error: Failed to recreate tunnel"
+                    echo "Creation output: $CREATE_RESULT"
                     exit 1
                 fi
             else
-                echo "本地已存在该 tunnel 的凭据文件"
-                echo "调试信息：凭据文件大小：$(ls -l $CREDENTIALS_FILE | awk '{print $5}') 字节"
+                echo "Local credentials file already exists for this tunnel"
+                echo "Debug info: Credentials file size: $(ls -l $CREDENTIALS_FILE | awk '{print $5}') bytes"
             fi
             
-            echo "使用现有 Cloudflare Tunnel，ID: $TUNNEL_ID"
+            echo "Using existing Cloudflare Tunnel, ID: $TUNNEL_ID"
         else
-            echo "错误：输入无效，请重新执行脚本"
+            echo "Error: Invalid input, please re-execute the script"
             exit 1
         fi
     else
-        echo "请输入新的 tunnel 名称："
-        read -p "Tunnel 名称: " NEW_TUNNEL_NAME
+        echo "Please enter new tunnel name:"
+        read -p "Tunnel name: " NEW_TUNNEL_NAME
         if [ -z "$NEW_TUNNEL_NAME" ]; then
             NEW_TUNNEL_NAME="codeserver-tunnel-$(date +%s)"
         fi
-        echo "创建名为 $NEW_TUNNEL_NAME 的 tunnel..."
-        TUNNEL_CREATION_OUTPUT=$(cloudflared tunnel create $NEW_TUNNEL_NAME 2>&1 || echo "命令执行失败: $?")
-        echo "创建命令输出: $TUNNEL_CREATION_OUTPUT"
+        echo "Creating tunnel named $NEW_TUNNEL_NAME..."
+        TUNNEL_CREATION_OUTPUT=$(cloudflared tunnel create $NEW_TUNNEL_NAME 2>&1 || echo "Command execution failed: $?")
+        echo "Creation command output: $TUNNEL_CREATION_OUTPUT"
         
         TUNNEL_ID=$(echo "$TUNNEL_CREATION_OUTPUT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
-        echo "提取到的 Tunnel ID: '$TUNNEL_ID'"
+        echo "Extracted Tunnel ID: '$TUNNEL_ID'"
         
         if [[ "$TUNNEL_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
             TUNNEL_NAME="$NEW_TUNNEL_NAME"
-            echo "成功创建 Cloudflare Tunnel，ID: $TUNNEL_ID"
+            echo "Successfully created Cloudflare Tunnel, ID: $TUNNEL_ID"
         else
-            echo "错误：创建 Cloudflare Tunnel 失败"
-            echo "输出信息：$TUNNEL_CREATION_OUTPUT"
+            echo "Error: Failed to create Cloudflare Tunnel"
+            echo "Output information: $TUNNEL_CREATION_OUTPUT"
             exit 1
         fi
     fi
 elif [ -z "$TUNNEL_ID" ]; then
-    echo "错误：创建 Cloudflare Tunnel 失败"
-    echo "输出信息：$TUNNEL_CREATION_OUTPUT"
+    echo "Error: Failed to create Cloudflare Tunnel"
+    echo "Output information: $TUNNEL_CREATION_OUTPUT"
     exit 1
 else
-    echo "成功创建 Cloudflare Tunnel，ID: $TUNNEL_ID"
+    echo "Successfully created Cloudflare Tunnel, ID: $TUNNEL_ID"
 fi
 
 echo ""
-echo "12. 配置 Cloudflare Tunnel..."
+echo "12. Configuring Cloudflare Tunnel..."
 mkdir -p /etc/cloudflared
 cat > /etc/cloudflared/config.yml << EOF
 url: http://localhost:8080
@@ -384,10 +358,10 @@ credentials-file: /root/.cloudflared/$TUNNEL_ID.json
 EOF
 
 echo ""
-echo "13. 启动并启用 Cloudflare Tunnel 服务..."
+echo "13. Starting and enabling Cloudflare Tunnel service..."
 # 检查服务是否已安装
 if [ -f "/etc/systemd/system/cloudflared.service" ]; then
-    echo "检测到 Cloudflare Tunnel 服务已存在，先卸载旧服务..."
+    echo "Detected Cloudflare Tunnel service already exists, uninstalling old service..."
     cloudflared service uninstall
 fi
 # 安装新服务
@@ -397,34 +371,34 @@ systemctl enable --now cloudflared
 sleep 5
 
 echo ""
-echo "14. 绑定自定义域名到 Cloudflare Tunnel..."
-echo "将 $FULL_DOMAIN 绑定到 tunnel..."
+echo "14. Binding custom domain to Cloudflare Tunnel..."
+echo "Binding $FULL_DOMAIN to tunnel..."
 BIND_RESULT=$(cloudflared tunnel route dns $TUNNEL_NAME $FULL_DOMAIN 2>&1)
 
 if echo "$BIND_RESULT" | grep -q "Failed to add route"; then
-    echo "警告：绑定域名失败，可能是因为DNS记录已存在"
-    echo "错误信息：$BIND_RESULT"
-    echo "请在 Cloudflare 仪表盘中手动删除现有记录后重新运行绑定命令"
+    echo "Warning: Failed to bind domain, may be due to existing DNS record"
+    echo "Error message: $BIND_RESULT"
+    echo "Please manually delete existing record in Cloudflare dashboard and re-run the binding command"
 else
-    echo "成功绑定 $FULL_DOMAIN 到 Cloudflare Tunnel"
+    echo "Successfully bound $FULL_DOMAIN to Cloudflare Tunnel"
 fi
 
 echo ""
-echo "=== 部署完成，验证服务状态 ==="
+echo "=== Deployment completed, verifying service status ==="
 echo ""
-echo "1. code Server 状态:"
+echo "1. code Server status:"
 systemctl is-active code-server@root
 echo ""
-echo "2. Cloudflare Tunnel 状态:"
+echo "2. Cloudflare Tunnel status:"
 systemctl is-active cloudflared
 
 echo ""
-echo "=== 访问信息 ==="
+echo "=== Access information ==="
 echo ""
-echo "code Server 访问地址:"
-echo "- 自定义域名: https://$FULL_DOMAIN"
-echo "- Cloudflare Tunnel 默认地址: https://$TUNNEL_ID.cfargotunnel.com"
+echo "code Server access addresses:"
+echo "- Custom domain: https://$FULL_DOMAIN"
+echo "- Cloudflare Tunnel default address: https://$TUNNEL_ID.cfargotunnel.com"
 echo ""
-echo "code Server 登录密码: $CODESERVER_PASSWORD"
+echo "code Server login password: $CODESERVER_PASSWORD"
 echo ""
-echo "=== 部署完成 ==="
+echo "=== Deployment completed ==="
