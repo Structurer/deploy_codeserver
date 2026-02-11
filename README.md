@@ -22,7 +22,7 @@
 
 ## 快速开始
 
-### 方法一：直接执行（推荐）
+### 直接执行（推荐）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codeserver/main/deploy_codeserver.sh | bash
