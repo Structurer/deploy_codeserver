@@ -25,7 +25,7 @@ fi
 
 # 步骤2：安装必要依赖
 echo "\n2. 安装必要依赖..."
-apt install -y curl wget unzip git openssl
+apt install -y curl
 
 # 步骤3：安装 code Server
 echo "\n3. 安装 code Server..."
