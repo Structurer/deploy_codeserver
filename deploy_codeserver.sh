@@ -140,14 +140,46 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
     
     if [ "$tunnel_choice" = "1" ]; then
         echo "正在获取现有 tunnel 列表..."
-        TUNNEL_LIST=$(cloudflared tunnel list 2>&1 || echo "命令执行失败: $?")
         
-        if echo "$TUNNEL_LIST" | grep -q "命令执行失败"; then
-            echo "错误：无法获取 tunnel 列表，请重新授权"
-            echo "正在重新授权..."
+        # 循环尝试获取 tunnel 列表，最多尝试3次
+        MAX_RETRIES=3
+        RETRY_COUNT=0
+        TUNNEL_LIST=""
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            TUNNEL_LIST=$(cloudflared tunnel list 2>&1)
+            
+            # 检查命令是否成功执行
+            if [ $? -eq 0 ]; then
+                # 检查是否包含有效的 tunnel 信息
+                if echo "$TUNNEL_LIST" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
+                    break
+                else
+                    echo "警告：获取到的 tunnel 列表格式异常，尝试重新授权..."
+                fi
+            else
+                echo "错误：无法获取 tunnel 列表，错误信息：$TUNNEL_LIST"
+                echo "尝试重新授权..."
+            fi
+            
+            # 重新授权
             cloudflared tunnel login
-            TUNNEL_LIST=$(cloudflared tunnel list 2>&1 || echo "命令执行失败: $?")
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "重新尝试获取 tunnel 列表..."
+            fi
+        done
+        
+        # 检查是否成功获取到 tunnel 列表
+        if [ -z "$TUNNEL_LIST" ] || ! echo "$TUNNEL_LIST" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
+            echo "错误：无法获取有效的 tunnel 列表，请稍后重试"
+            exit 1
         fi
+        
+        echo "调试信息：获取到的 tunnel 列表内容："
+        echo "$TUNNEL_LIST"
+        echo "---------------------------------------------------------------"
         
         # 解析 tunnel 列表并显示带序号的选项
         echo "\n现有 tunnel 列表："
@@ -155,17 +187,29 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
         echo "---------------------------------------------------------------"
         
         # 将 tunnel 信息解析为数组
-        IFS=$'\n' read -r -d '' -a TUNNEL_ITEMS <<< "$(echo "$TUNNEL_LIST" | grep -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')"
+        TUNNEL_ITEMS=()
+        while IFS= read -r line; do
+            if echo "$line" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
+                TUNNEL_ITEMS+=("$line")
+            fi
+        done <<< "$TUNNEL_LIST"
         
         # 显示 tunnel 列表
         for i in "${!TUNNEL_ITEMS[@]}"; do
             index=$((i+1))
             tunnel_line=${TUNNEL_ITEMS[$i]}
+            # 提取 tunnel 信息，处理可能的空格问题
             tunnel_id=$(echo "$tunnel_line" | awk '{print $1}')
             tunnel_name=$(echo "$tunnel_line" | awk '{print $2}')
-            tunnel_created=$(echo "$tunnel_line" | awk '{print $3}')
+            tunnel_created=$(echo "$tunnel_line" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')
             printf "%2d   %s   %-16s   %s\n" "$index" "$tunnel_id" "$tunnel_name" "$tunnel_created"
         done
+        
+        # 检查是否有 tunnel 可用
+        if [ ${#TUNNEL_ITEMS[@]} -eq 0 ]; then
+            echo "错误：未找到任何现有 tunnel，请选择创建新 tunnel"
+            exit 1
+        fi
         
         # 让用户选择 tunnel
         read -p "\n请输入要使用的 tunnel 序号：" tunnel_index
@@ -184,21 +228,51 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
             
             # 检查本地是否存在凭据文件
             CREDENTIALS_FILE="/root/.cloudflared/$TUNNEL_ID.json"
+            echo "调试信息：检查凭据文件路径：$CREDENTIALS_FILE"
+            
             if [ ! -f "$CREDENTIALS_FILE" ]; then
                 echo "\n检测到本地缺少该 tunnel 的凭据文件"
                 echo "正在重新获取凭据..."
                 
-                # 重新授权
-                cloudflared tunnel login
+                # 尝试多种方式获取凭据
+                RETRY_COUNT=0
+                MAX_RETRIES=3
                 
-                # 检查凭据文件是否生成
+                while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                    # 重新授权
+                    cloudflared tunnel login
+                    
+                    # 检查凭据文件是否生成
+                    if [ -f "$CREDENTIALS_FILE" ]; then
+                        echo "成功获取 tunnel 凭据"
+                        break
+                    fi
+                    
+                    # 如果凭据文件仍不存在，尝试使用 tunnel info 命令
+                    echo "尝试使用 tunnel info 命令获取凭据..."
+                    cloudflared tunnel info $TUNNEL_ID
+                    
+                    # 再次检查凭据文件
+                    if [ -f "$CREDENTIALS_FILE" ]; then
+                        echo "成功获取 tunnel 凭据"
+                        break
+                    fi
+                    
+                    RETRY_COUNT=$((RETRY_COUNT + 1))
+                    
+                    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                        echo "重新尝试获取凭据..."
+                    fi
+                done
+                
+                # 最终检查凭据文件是否存在
                 if [ ! -f "$CREDENTIALS_FILE" ]; then
                     echo "错误：无法获取 tunnel 凭据，请尝试创建新 tunnel"
                     exit 1
                 fi
-                echo "成功获取 tunnel 凭据"
             else
                 echo "本地已存在该 tunnel 的凭据文件"
+                echo "调试信息：凭据文件大小：$(ls -l $CREDENTIALS_FILE | awk '{print $5}') 字节"
             fi
             
             echo "使用现有 Cloudflare Tunnel，ID: $TUNNEL_ID"
