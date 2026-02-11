@@ -28,6 +28,13 @@
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codeserver/main/deploy_codeserver.sh)"
 ```
 
+### 备用sh执行（en_US)
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codeserver/main/deploy_codeserver_en.sh)"
+```
+
+
 ## 执行流程
 
 1. **系统准备**
