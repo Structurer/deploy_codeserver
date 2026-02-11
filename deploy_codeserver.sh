@@ -146,9 +146,23 @@ elif [ "$auth_method" = "2" ]; then
 api_token: $CLOUDFLARE_API_TOKEN
 EOF
     
-    # 尝试获取隧道列表验证授权
+    # 尝试获取隧道列表验证授权，添加超时
     echo "验证 API Token 有效性..."
-    TUNNEL_LIST=$(cloudflared tunnel list 2>&1)
+    # 使用超时机制，避免无限等待
+    if command -v timeout > /dev/null; then
+        TUNNEL_LIST=$(timeout 30s cloudflared tunnel list 2>&1)
+        TIMEOUT_STATUS=$?
+        
+        if [ "$TIMEOUT_STATUS" = "124" ]; then
+            echo "错误：验证超时，请检查网络连接"
+            # 清理配置文件
+            rm -f "$HOME/.cloudflared/config.yml"
+            exit 1
+        fi
+    else
+        # 如果没有 timeout 命令，直接执行
+        TUNNEL_LIST=$(cloudflared tunnel list 2>&1)
+    fi
     
     if echo "$TUNNEL_LIST" | grep -q "error"; then
         echo "错误：API Token 验证失败，请检查 Token 是否正确"
