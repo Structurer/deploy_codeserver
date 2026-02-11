@@ -140,26 +140,27 @@ elif [ "$auth_method" = "2" ]; then
     
     echo "正在使用 API Token 授权..."
     
-    # 创建临时配置文件
+    # 创建配置文件
     mkdir -p "$HOME/.cloudflared"
+    cat > "$HOME/.cloudflared/config.yml" << EOF
+api_token: $CLOUDFLARE_API_TOKEN
+EOF
     
-    # 尝试使用 API Token 执行操作
-    # 首先创建一个测试隧道来验证 Token
-    TEST_TUNNEL_NAME="test-token-auth-$(date +%s)"
-    TEST_RESULT=$(CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" cloudflared tunnel create $TEST_TUNNEL_NAME 2>&1)
+    # 尝试获取隧道列表验证授权
+    echo "验证 API Token 有效性..."
+    TUNNEL_LIST=$(cloudflared tunnel list 2>&1)
     
-    if echo "$TEST_RESULT" | grep -q "Created tunnel"; then
-        echo "API Token 授权成功！"
-        # 清理测试隧道
-        TEST_TUNNEL_ID=$(echo "$TEST_RESULT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
-        if [ ! -z "$TEST_TUNNEL_ID" ]; then
-            CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" cloudflared tunnel delete $TEST_TUNNEL_ID 2>&1 || true
-        fi
-        echo "授权完成！"
-    else
+    if echo "$TUNNEL_LIST" | grep -q "error"; then
         echo "错误：API Token 验证失败，请检查 Token 是否正确"
-        echo "错误信息：$TEST_RESULT"
+        echo "错误信息：$TUNNEL_LIST"
+        # 清理配置文件
+        rm -f "$HOME/.cloudflared/config.yml"
         exit 1
+    else
+        echo "API Token 授权成功！"
+        # 清理配置文件，因为我们只需要验证 Token
+        rm -f "$HOME/.cloudflared/config.yml"
+        echo "授权完成！"
     fi
 else
     echo "错误：无效的选择，请重新执行脚本"
