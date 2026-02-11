@@ -25,20 +25,8 @@
 ### 直接执行（推荐）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codeserver/main/deploy_codeserver.sh | bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codeserver/main/deploy_codeserver.sh)"
 ```
-
-# 1. 下载脚本到本地
-curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codeserver/main/deploy_codeserver.sh -o deploy_codeserver.sh
-
-# 2. 赋予执行权限
-chmod +x deploy_codeserver.sh
-
-# 3. 直接执行脚本（交互式）
-./deploy_codeserver.sh
-
-
-
 
 ## 执行流程
 
