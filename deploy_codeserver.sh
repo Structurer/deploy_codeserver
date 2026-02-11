@@ -139,15 +139,73 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
     read -p "请输入选择 (1/2): " tunnel_choice
     
     if [ "$tunnel_choice" = "1" ]; then
-        echo "正在获取现有 tunnel 的 ID..."
+        echo "正在获取现有 tunnel 列表..."
         TUNNEL_LIST=$(cloudflared tunnel list 2>&1 || echo "命令执行失败: $?")
-        echo "Tunnel 列表输出: $TUNNEL_LIST"
-        TUNNEL_ID=$(echo "$TUNNEL_LIST" | grep "$TUNNEL_NAME" | awk '{print $1}')
-        if [ -z "$TUNNEL_ID" ]; then
-            echo "错误：无法获取现有 tunnel 的 ID"
+        
+        if echo "$TUNNEL_LIST" | grep -q "命令执行失败"; then
+            echo "错误：无法获取 tunnel 列表，请重新授权"
+            echo "正在重新授权..."
+            cloudflared tunnel login
+            TUNNEL_LIST=$(cloudflared tunnel list 2>&1 || echo "命令执行失败: $?")
+        fi
+        
+        # 解析 tunnel 列表并显示带序号的选项
+        echo "\n现有 tunnel 列表："
+        echo "序号  ID                                   NAME              CREATED"
+        echo "---------------------------------------------------------------"
+        
+        # 将 tunnel 信息解析为数组
+        IFS=$'\n' read -r -d '' -a TUNNEL_ITEMS <<< "$(echo "$TUNNEL_LIST" | grep -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')"
+        
+        # 显示 tunnel 列表
+        for i in "${!TUNNEL_ITEMS[@]}"; do
+            index=$((i+1))
+            tunnel_line=${TUNNEL_ITEMS[$i]}
+            tunnel_id=$(echo "$tunnel_line" | awk '{print $1}')
+            tunnel_name=$(echo "$tunnel_line" | awk '{print $2}')
+            tunnel_created=$(echo "$tunnel_line" | awk '{print $3}')
+            printf "%2d   %s   %-16s   %s\n" "$index" "$tunnel_id" "$tunnel_name" "$tunnel_created"
+        done
+        
+        # 让用户选择 tunnel
+        read -p "\n请输入要使用的 tunnel 序号：" tunnel_index
+        
+        # 验证输入
+        if [[ "$tunnel_index" =~ ^[0-9]+$ ]] && [ "$tunnel_index" -ge 1 ] && [ "$tunnel_index" -le "${#TUNNEL_ITEMS[@]}" ]; then
+            # 获取选中的 tunnel 信息
+            selected_index=$((tunnel_index-1))
+            selected_tunnel=${TUNNEL_ITEMS[$selected_index]}
+            TUNNEL_ID=$(echo "$selected_tunnel" | awk '{print $1}')
+            TUNNEL_NAME=$(echo "$selected_tunnel" | awk '{print $2}')
+            
+            echo "\n您选择的 tunnel："
+            echo "ID: $TUNNEL_ID"
+            echo "名称: $TUNNEL_NAME"
+            
+            # 检查本地是否存在凭据文件
+            CREDENTIALS_FILE="/root/.cloudflared/$TUNNEL_ID.json"
+            if [ ! -f "$CREDENTIALS_FILE" ]; then
+                echo "\n检测到本地缺少该 tunnel 的凭据文件"
+                echo "正在重新获取凭据..."
+                
+                # 重新授权
+                cloudflared tunnel login
+                
+                # 检查凭据文件是否生成
+                if [ ! -f "$CREDENTIALS_FILE" ]; then
+                    echo "错误：无法获取 tunnel 凭据，请尝试创建新 tunnel"
+                    exit 1
+                fi
+                echo "成功获取 tunnel 凭据"
+            else
+                echo "本地已存在该 tunnel 的凭据文件"
+            fi
+            
+            echo "使用现有 Cloudflare Tunnel，ID: $TUNNEL_ID"
+        else
+            echo "错误：输入无效，请重新执行脚本"
             exit 1
         fi
-        echo "使用现有 Cloudflare Tunnel，ID: $TUNNEL_ID"
     else
         echo "请输入新的 tunnel 名称："
         read -p "Tunnel 名称: " NEW_TUNNEL_NAME
