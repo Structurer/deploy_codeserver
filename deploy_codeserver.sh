@@ -33,8 +33,23 @@ if [ "$CODESERVER_PASSWORD" != "$CODESERVER_PASSWORD_CONFIRM" ]; then
     exit 1
 fi
 
-# 修改默认密码
-sed -i "s/password: .*/password: $CODESERVER_PASSWORD/" /root/.config/code-server/config.yaml
+# 确保配置目录存在
+mkdir -p /root/.config/code-server
+
+# 如果配置文件不存在，创建一个基本的配置文件
+if [ ! -f "/root/.config/code-server/config.yaml" ]; then
+    cat > /root/.config/code-server/config.yaml << EOF
+bind-addr: 127.0.0.1:8080
+auth: password
+password: $CODESERVER_PASSWORD
+cert: false
+EOF
+    echo "配置文件已创建"
+else
+    # 修改默认密码
+    sed -i "s/password: .*/password: $CODESERVER_PASSWORD/" /root/.config/code-server/config.yaml
+    echo "密码已更新"
+fi
 
 # 步骤5：启动并启用 code Server 服务
 echo "\n5. 启动并启用 code Server 服务..."
@@ -56,7 +71,7 @@ cloudflared tunnel login
 
 # 步骤8：验证授权是否成功
 echo "\n8. 验证 Cloudflare 授权..."
-if [ ! -f "~/.cloudflared/cert.pem" ]; then
+if [ ! -f "$HOME/.cloudflared/cert.pem" ]; then
     echo "错误：Cloudflare 授权失败，请重新执行授权步骤"
     exit 1
 fi
