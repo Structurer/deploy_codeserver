@@ -239,8 +239,16 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
                 MAX_RETRIES=3
                 
                 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-                    # 重新授权
-                    cloudflared tunnel login
+                    # 检查是否存在现有证书文件
+                    if [ -f "$HOME/.cloudflared/cert.pem" ]; then
+                        echo "检测到现有证书文件，尝试使用现有证书获取凭据..."
+                        # 直接尝试获取 tunnel 信息，不重新登录
+                        cloudflared tunnel info $TUNNEL_ID
+                    else
+                        # 重新授权
+                        echo "执行 cloudflared tunnel login 获取新证书..."
+                        cloudflared tunnel login
+                    fi
                     
                     # 检查凭据文件是否生成
                     if [ -f "$CREDENTIALS_FILE" ]; then
@@ -248,11 +256,27 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
                         break
                     fi
                     
-                    # 如果凭据文件仍不存在，尝试使用 tunnel info 命令
-                    echo "尝试使用 tunnel info 命令获取凭据..."
-                    cloudflared tunnel info $TUNNEL_ID
+                    # 如果凭据文件仍不存在，尝试删除现有证书后重新授权
+                    if [ -f "$HOME/.cloudflared/cert.pem" ]; then
+                        echo "尝试删除现有证书后重新授权..."
+                        rm -f "$HOME/.cloudflared/cert.pem"
+                        cloudflared tunnel login
+                    fi
                     
                     # 再次检查凭据文件
+                    if [ -f "$CREDENTIALS_FILE" ]; then
+                        echo "成功获取 tunnel 凭据"
+                        break
+                    fi
+                    
+                    # 尝试直接创建一个临时 tunnel 来触发凭据生成
+                    echo "尝试创建临时 tunnel 来触发凭据生成..."
+                    TEMP_TUNNEL_NAME="temp-tunnel-$(date +%s)"
+                    cloudflared tunnel create $TEMP_TUNNEL_NAME 2>&1 || true
+                    # 清理临时 tunnel
+                    cloudflared tunnel delete $TEMP_TUNNEL_NAME 2>&1 || true
+                    
+                    # 最后检查凭据文件
                     if [ -f "$CREDENTIALS_FILE" ]; then
                         echo "成功获取 tunnel 凭据"
                         break
@@ -268,6 +292,7 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
                 # 最终检查凭据文件是否存在
                 if [ ! -f "$CREDENTIALS_FILE" ]; then
                     echo "错误：无法获取 tunnel 凭据，请尝试创建新 tunnel"
+                    echo "建议操作：手动执行 'cloudflared tunnel create new-tunnel' 创建新 tunnel"
                     exit 1
                 fi
             else
