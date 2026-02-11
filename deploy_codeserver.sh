@@ -232,67 +232,39 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
             
             if [ ! -f "$CREDENTIALS_FILE" ]; then
                 echo "\n检测到本地缺少该 tunnel 的凭据文件"
-                echo "正在重新获取凭据..."
+                echo "执行方案：删除现有 tunnel 并重新创建，以获取新的凭据文件..."
                 
-                # 尝试多种方式获取凭据
-                RETRY_COUNT=0
-                MAX_RETRIES=3
+                # 删除现有 tunnel
+                echo "正在删除现有 tunnel '$TUNNEL_NAME'..."
+                DELETE_RESULT=$(cloudflared tunnel delete $TUNNEL_ID 2>&1)
+                echo "删除 tunnel 结果：$DELETE_RESULT"
                 
-                while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-                    # 检查是否存在现有证书文件
-                    if [ -f "$HOME/.cloudflared/cert.pem" ]; then
-                        echo "检测到现有证书文件，尝试使用现有证书获取凭据..."
-                        # 直接尝试获取 tunnel 信息，不重新登录
-                        cloudflared tunnel info $TUNNEL_ID
+                # 重新创建相同名称的 tunnel
+                echo "正在重新创建 tunnel '$TUNNEL_NAME'..."
+                CREATE_RESULT=$(cloudflared tunnel create $TUNNEL_NAME 2>&1)
+                echo "创建 tunnel 结果：$CREATE_RESULT"
+                
+                # 提取新的 tunnel ID
+                NEW_TUNNEL_ID=$(echo "$CREATE_RESULT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
+                
+                if [[ "$NEW_TUNNEL_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+                    echo "成功重新创建 tunnel，新 ID: $NEW_TUNNEL_ID"
+                    # 更新 TUNNEL_ID 变量
+                    TUNNEL_ID="$NEW_TUNNEL_ID"
+                    # 更新凭据文件路径
+                    CREDENTIALS_FILE="/root/.cloudflared/$TUNNEL_ID.json"
+                    echo "调试信息：新的凭据文件路径：$CREDENTIALS_FILE"
+                    
+                    # 检查新的凭据文件是否生成
+                    if [ -f "$CREDENTIALS_FILE" ]; then
+                        echo "成功获取新的 tunnel 凭据文件"
                     else
-                        # 重新授权
-                        echo "执行 cloudflared tunnel login 获取新证书..."
-                        cloudflared tunnel login
+                        echo "错误：重新创建 tunnel 后仍未生成凭据文件"
+                        exit 1
                     fi
-                    
-                    # 检查凭据文件是否生成
-                    if [ -f "$CREDENTIALS_FILE" ]; then
-                        echo "成功获取 tunnel 凭据"
-                        break
-                    fi
-                    
-                    # 如果凭据文件仍不存在，尝试删除现有证书后重新授权
-                    if [ -f "$HOME/.cloudflared/cert.pem" ]; then
-                        echo "尝试删除现有证书后重新授权..."
-                        rm -f "$HOME/.cloudflared/cert.pem"
-                        cloudflared tunnel login
-                    fi
-                    
-                    # 再次检查凭据文件
-                    if [ -f "$CREDENTIALS_FILE" ]; then
-                        echo "成功获取 tunnel 凭据"
-                        break
-                    fi
-                    
-                    # 尝试直接创建一个临时 tunnel 来触发凭据生成
-                    echo "尝试创建临时 tunnel 来触发凭据生成..."
-                    TEMP_TUNNEL_NAME="temp-tunnel-$(date +%s)"
-                    cloudflared tunnel create $TEMP_TUNNEL_NAME 2>&1 || true
-                    # 清理临时 tunnel
-                    cloudflared tunnel delete $TEMP_TUNNEL_NAME 2>&1 || true
-                    
-                    # 最后检查凭据文件
-                    if [ -f "$CREDENTIALS_FILE" ]; then
-                        echo "成功获取 tunnel 凭据"
-                        break
-                    fi
-                    
-                    RETRY_COUNT=$((RETRY_COUNT + 1))
-                    
-                    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                        echo "重新尝试获取凭据..."
-                    fi
-                done
-                
-                # 最终检查凭据文件是否存在
-                if [ ! -f "$CREDENTIALS_FILE" ]; then
-                    echo "错误：无法获取 tunnel 凭据，请尝试创建新 tunnel"
-                    echo "建议操作：手动执行 'cloudflared tunnel create new-tunnel' 创建新 tunnel"
+                else
+                    echo "错误：重新创建 tunnel 失败"
+                    echo "创建输出：$CREATE_RESULT"
                     exit 1
                 fi
             else
