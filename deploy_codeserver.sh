@@ -64,19 +64,26 @@ echo ""
 echo "3. 安装 code Server..."
 curl -fsSL https://code-server.dev/install.sh | sh
 
-echo ""
+echo "" 
 echo "4. 配置 code Server..."
-echo "请输入 code Server 的登录密码："
-read -s CODESERVER_PASSWORD
-echo ""
-echo "确认密码："
-read -s CODESERVER_PASSWORD_CONFIRM
 
-if [ "$CODESERVER_PASSWORD" != "$CODESERVER_PASSWORD_CONFIRM" ]; then
+# 密码输入循环，直到两次输入一致
+while true; do
+    echo "请输入 code Server 的登录密码："
+    read -s CODESERVER_PASSWORD
     echo ""
-echo "错误：两次输入的密码不一致，请重新执行脚本"
-    exit 1
-fi
+    echo "确认密码："
+    read -s CODESERVER_PASSWORD_CONFIRM
+    echo ""
+    
+    if [ "$CODESERVER_PASSWORD" = "$CODESERVER_PASSWORD_CONFIRM" ]; then
+        echo "密码确认成功！"
+        break
+    else
+        echo "错误：两次输入的密码不一致，请重新输入"
+        echo ""
+    fi
+done
 
 mkdir -p /root/.config/code-server
 
