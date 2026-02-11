@@ -6,6 +6,35 @@
 
 set -e
 
+# 处理 dpkg 锁文件的函数
+check_and_handle_dpkg_lock() {
+    echo "检查 dpkg 锁状态..."
+    if [ -f "/var/lib/dpkg/lock" ] || [ -f "/var/lib/dpkg/lock-frontend" ]; then
+        echo "检测到 dpkg 锁文件，尝试释放..."
+        # 尝试终止占用锁的进程
+        sudo fuser -vki -TERM /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend 2>/dev/null || true
+        # 完成未完成的配置
+        sudo dpkg --configure --pending 2>/dev/null || true
+        # 等待几秒钟让系统稳定
+        sleep 3
+    fi
+}
+
+# 检查并重启 code-server 服务的函数
+restart_code_server() {
+    echo "检查 code-server 服务状态..."
+    # 检查服务是否存在
+    if systemctl list-unit-files | grep -q code-server@.service; then
+        echo "重启 code-server 服务以应用新配置..."
+        systemctl restart code-server@root 2>/dev/null || systemctl start code-server@root
+        sleep 2
+        # 检查服务状态
+        systemctl status code-server@root --no-pager
+    else
+        echo "code-server 服务尚未安装，跳过重启操作..."
+    fi
+}
+
 echo ""
 echo "=== 开始部署 code Server + Cloudflare Tunnel ==="
 
@@ -19,6 +48,7 @@ read -p "请输入选择 (1/2): " update_choice
 if [ "$update_choice" = "1" ]; then
     echo ""
 echo "1. 更新系统包..."
+    check_and_handle_dpkg_lock
     apt update && apt upgrade -y
 else
     echo ""
@@ -27,6 +57,7 @@ fi
 
 echo ""
 echo "2. 安装必要依赖..."
+check_and_handle_dpkg_lock
 apt install -y curl
 
 echo ""
@@ -65,6 +96,8 @@ fi
 echo ""
 echo "5. 启动并启用 code Server 服务..."
 systemctl enable --now code-server@root
+# 重启服务以确保密码生效
+restart_code_server
 
 echo ""
 echo "=== code Server 部署完成 ==="
@@ -72,6 +105,7 @@ echo "=== code Server 部署完成 ==="
 echo ""
 echo "6. 安装 Cloudflare Tunnel 客户端..."
 curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+check_and_handle_dpkg_lock
 dpkg -i cloudflared.deb
 rm -f cloudflared.deb
 
