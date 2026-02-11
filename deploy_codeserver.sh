@@ -8,9 +8,20 @@ set -e
 
 echo "=== 开始部署 code Server + Cloudflare Tunnel ==="
 
+# 步骤0：选择是否跳过系统更新
+echo "\n0. 系统更新选项..."
+echo "系统更新可能需要较长时间，是否跳过？"
+echo "1. 执行系统更新（推荐，确保系统包最新）"
+echo "2. 跳过系统更新（快速部署，使用现有包）"
+read -p "请输入选择 (1/2): " update_choice
+
 # 步骤1：系统更新
-echo "\n1. 更新系统包..."
-apt update && apt upgrade -y
+if [ "$update_choice" = "1" ]; then
+    echo "\n1. 更新系统包..."
+    apt update && apt upgrade -y
+else
+    echo "\n1. 跳过系统更新..."
+fi
 
 # 步骤2：安装必要依赖
 echo "\n2. 安装必要依赖..."
@@ -65,9 +76,27 @@ rm -f cloudflared.deb
 
 # 步骤7：Cloudflare 账户授权
 echo "\n7. Cloudflare 账户授权..."
-echo "请在浏览器中打开以下URL并登录Cloudflare账户授权："
-echo "授权完成后，按回车键继续..."
-cloudflared tunnel login
+if [ -f "$HOME/.cloudflared/cert.pem" ]; then
+    echo "检测到已存在的 Cloudflare 证书"
+    echo "请选择操作："
+    echo "1. 使用现有证书"
+    echo "2. 重新授权（覆盖现有证书）"
+    read -p "请输入选择 (1/2): " cert_choice
+    
+    if [ "$cert_choice" = "2" ]; then
+        echo "正在删除现有证书..."
+        rm -f "$HOME/.cloudflared/cert.pem"
+        echo "请在浏览器中打开以下URL并登录Cloudflare账户授权："
+        echo "授权完成后，按回车键继续..."
+        cloudflared tunnel login
+    else
+        echo "使用现有证书"
+    fi
+else
+    echo "请在浏览器中打开以下URL并登录Cloudflare账户授权："
+    echo "授权完成后，按回车键继续..."
+    cloudflared tunnel login
+fi
 
 # 步骤8：验证授权是否成功
 echo "\n8. 验证 Cloudflare 授权..."
@@ -77,101 +106,87 @@ if [ ! -f "$HOME/.cloudflared/cert.pem" ]; then
 fi
 echo "Cloudflare 授权成功！"
 
-# 步骤9：提取已授权的域名
-echo "\n9. 提取已授权的域名..."
-# 创建临时目录
-temp_dir=$(mktemp -d)
-# 复制证书文件到临时目录
-cp ~/.cloudflared/cert.pem $temp_dir/
-cd $temp_dir
+# 步骤9：输入完整域名
+echo "\n9. 配置完整域名..."
+echo "请输入您要使用的完整域名（如 code.example.com）："
+read -p "完整域名: " FULL_DOMAIN
 
-# 提取证书中的域名信息
-echo "正在提取已授权的域名..."
-domains=()
-index=1
-
-# 使用 openssl 解析证书，提取 subjectAlternativeName
-if command -v openssl &> /dev/null; then
-    # 提取 subjectAlternativeName 字段
-    san=$(openssl x509 -in cert.pem -noout -ext subjectAlternativeName 2>/dev/null || echo "")
-    
-    if [ -n "$san" ]; then
-        # 解析 DNS 名称
-        while IFS= read -r line; do
-            if [[ $line == *"DNS:"* ]]; then
-                # 提取 DNS 名称
-                dns_name=$(echo $line | sed 's/.*DNS://g' | sed 's/,.*//g' | xargs)
-                if [ -n "$dns_name" ]; then
-                    domains+=($dns_name)
-                    echo "$index. $dns_name"
-                    index=$((index+1))
-                fi
-            fi
-        done <<< "$san"
-    fi
+# 验证域名输入
+if [ -z "$FULL_DOMAIN" ]; then
+    echo "错误：域名不能为空"
+    exit 1
 fi
 
-# 如果没有提取到域名，使用默认方法
-if [ ${#domains[@]} -eq 0 ]; then
-    echo "未检测到已授权的域名，请手动输入"
-    # 保持原有的手动输入逻辑
-    MANUAL_DOMAIN_INPUT=true
-else
-    # 让用户选择域名
-    echo "\n请输入要使用的域名序号："
-    read domain_index
-    
-    # 验证输入
-    if [[ $domain_index =~ ^[0-9]+$ ]] && [ $domain_index -ge 1 ] && [ $domain_index -le ${#domains[@]} ]; then
-        MAIN_DOMAIN=${domains[$((domain_index-1))]}
-        echo "您选择的域名：$MAIN_DOMAIN"
-    else
-        echo "输入无效，将使用手动输入方式"
-        MANUAL_DOMAIN_INPUT=true
-    fi
-fi
-
-# 清理临时目录
-cd /
-rm -rf $temp_dir
-
-# 如果需要手动输入主域名
-if [ "$MANUAL_DOMAIN_INPUT" = "true" ]; then
-    echo "请输入主域名（如 ceshi.autos）："
-    read MAIN_DOMAIN
-fi
-
-# 步骤10：输入子域名前缀（提供默认值）
-echo "\n10. 配置子域名..."
-default_subdomain="code"
-echo "请输入子域名前缀（默认: $default_subdomain）："
-echo "直接按回车键使用默认值，或输入自定义前缀"
-read -p "子域名前缀: " SUBDOMAIN_PREFIX
-
-# 如果用户没有输入，使用默认值
-if [ -z "$SUBDOMAIN_PREFIX" ]; then
-    SUBDOMAIN_PREFIX=$default_subdomain
-    echo "使用默认子域名前缀: $SUBDOMAIN_PREFIX"
-else
-    echo "使用自定义子域名前缀: $SUBDOMAIN_PREFIX"
-fi
-
-# 拼接完整域名
-FULL_DOMAIN="$SUBDOMAIN_PREFIX.$MAIN_DOMAIN"
-echo "完整域名: $FULL_DOMAIN"
+echo "使用的域名: $FULL_DOMAIN"
 
 # 步骤11：创建 Cloudflare Tunnel
 echo "\n11. 创建 Cloudflare Tunnel..."
-echo "创建名为 codeserver-tunnel 的 tunnel..."
-TUNNEL_CREATION_OUTPUT=$(cloudflared tunnel create codeserver-tunnel)
-TUNNEL_ID=$(echo "$TUNNEL_CREATION_OUTPUT" | grep "Created tunnel codeserver-tunnel with id" | awk '{print $7}')
+TUNNEL_NAME="codeserver-tunnel"
+TUNNEL_ID=""
 
-if [ -z "$TUNNEL_ID" ]; then
+# 尝试创建Tunnel
+echo "正在尝试创建 tunnel '$TUNNEL_NAME'..."
+TUNNEL_CREATION_OUTPUT=$(cloudflared tunnel create $TUNNEL_NAME 2>&1 || echo "命令执行失败: $?")
+echo "创建命令输出: $TUNNEL_CREATION_OUTPUT"
+
+# 更健壮的Tunnel ID提取逻辑
+TUNNEL_ID=$(echo "$TUNNEL_CREATION_OUTPUT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
+echo "提取到的 Tunnel ID: '$TUNNEL_ID'"
+
+# 如果创建失败且是因为名称已存在
+if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with name already exists"; then
+    echo "检测到 tunnel '$TUNNEL_NAME' 已存在"
+    echo "请选择操作："
+    echo "1. 使用现有 tunnel"
+    echo "2. 创建新名称的 tunnel"
+    read -p "请输入选择 (1/2): " tunnel_choice
+    
+    if [ "$tunnel_choice" = "1" ]; then
+        # 使用现有Tunnel，获取其ID
+        echo "正在获取现有 tunnel 的 ID..."
+        TUNNEL_LIST=$(cloudflared tunnel list 2>&1 || echo "命令执行失败: $?")
+        echo "Tunnel 列表输出: $TUNNEL_LIST"
+        TUNNEL_ID=$(echo "$TUNNEL_LIST" | grep "$TUNNEL_NAME" | awk '{print $1}')
+        if [ -z "$TUNNEL_ID" ]; then
+            echo "错误：无法获取现有 tunnel 的 ID"
+            exit 1
+        fi
+        echo "使用现有 Cloudflare Tunnel，ID: $TUNNEL_ID"
+    else
+        # 创建新名称的Tunnel
+        echo "请输入新的 tunnel 名称："
+        read -p "Tunnel 名称: " NEW_TUNNEL_NAME
+        if [ -z "$NEW_TUNNEL_NAME" ]; then
+            NEW_TUNNEL_NAME="codeserver-tunnel-$(date +%s)"
+        fi
+        echo "创建名为 $NEW_TUNNEL_NAME 的 tunnel..."
+        TUNNEL_CREATION_OUTPUT=$(cloudflared tunnel create $NEW_TUNNEL_NAME 2>&1 || echo "命令执行失败: $?")
+        echo "创建命令输出: $TUNNEL_CREATION_OUTPUT"
+        
+        # 更健壮的Tunnel ID提取逻辑
+        # 从包含"Created tunnel"和"with id"的行中提取ID
+        TUNNEL_ID=$(echo "$TUNNEL_CREATION_OUTPUT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
+        echo "提取到的 Tunnel ID: '$TUNNEL_ID'"
+        
+        # 验证ID格式（简单验证：是否为36位的UUID格式）
+        if [[ "$TUNNEL_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            TUNNEL_NAME="$NEW_TUNNEL_NAME"
+            echo "成功创建 Cloudflare Tunnel，ID: $TUNNEL_ID"
+        else
+            echo "错误：创建 Cloudflare Tunnel 失败"
+            echo "输出信息：$TUNNEL_CREATION_OUTPUT"
+            exit 1
+        fi
+    fi
+elif [ -z "$TUNNEL_ID" ]; then
+    # 其他创建失败的情况
     echo "错误：创建 Cloudflare Tunnel 失败"
     echo "输出信息：$TUNNEL_CREATION_OUTPUT"
     exit 1
+else
+    # 创建成功
+    echo "成功创建 Cloudflare Tunnel，ID: $TUNNEL_ID"
 fi
-echo "成功创建 Cloudflare Tunnel，ID: $TUNNEL_ID"
 
 # 步骤12：配置 Cloudflare Tunnel
 echo "\n12. 配置 Cloudflare Tunnel..."
@@ -193,7 +208,7 @@ sleep 5
 # 步骤14：绑定自定义域名到 Cloudflare Tunnel
 echo "\n14. 绑定自定义域名到 Cloudflare Tunnel..."
 echo "将 $FULL_DOMAIN 绑定到 tunnel..."
-BIND_RESULT=$(cloudflared tunnel route dns codeserver-tunnel $FULL_DOMAIN 2>&1)
+BIND_RESULT=$(cloudflared tunnel route dns $TUNNEL_NAME $FULL_DOMAIN 2>&1)
 
 if echo "$BIND_RESULT" | grep -q "Failed to add route"; then
     echo "警告：绑定域名失败，可能是因为DNS记录已存在"
