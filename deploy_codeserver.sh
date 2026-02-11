@@ -318,6 +318,12 @@ EOF
 
 echo ""
 echo "13. 启动并启用 Cloudflare Tunnel 服务..."
+# 检查服务是否已安装
+if [ -f "/etc/systemd/system/cloudflared.service" ]; then
+    echo "检测到 Cloudflare Tunnel 服务已存在，先卸载旧服务..."
+    cloudflared service uninstall
+fi
+# 安装新服务
 cloudflared service install
 systemctl enable --now cloudflared
 
