@@ -141,7 +141,7 @@ if [ -f "$HOME/.cloudflared/cert.pem" ]; then
         echo ""
         
         echo "=== Authorization Instructions ==="
-        echo "1. Select any of the above authorization methods"
+        echo "1. Select any of the below authorization methods"
         echo "2. Log in to your Cloudflare account in the browser"
         echo "3. Click the 'Authorize' button to complete authorization"
         echo "4. After successful authorization, press Enter to continue"
@@ -170,8 +170,8 @@ if [ -f "$HOME/.cloudflared/cert.pem" ]; then
             echo "Please use your phone camera to scan the QR code below:"
             echo ""
             
-            # Generate QR code (using compact ASCII mode)
-            qrencode -t ASCII -s 1 "$AUTH_URL"
+            # Generate QR code (using compact ASCII mode with minimal margin)
+            qrencode -t ASCII -s 1 -m 0 "$AUTH_URL"
             echo ""
             
             # Wait for user input
@@ -201,7 +201,7 @@ else
     echo ""
     
     echo "=== Authorization Instructions ==="
-    echo "1. Select any of the above authorization methods"
+    echo "1. Select any of the below authorization methods"
     echo "2. Log in to your Cloudflare account in the browser"
     echo "3. Click the 'Authorize' button to complete authorization"
     echo "4. After successful authorization, press Enter to continue"
@@ -230,8 +230,8 @@ else
         echo "Please use your phone camera to scan the QR code below:"
         echo ""
         
-        # Generate QR code (using compact ASCII mode)
-        qrencode -t ASCII -s 1 "$AUTH_URL"
+        # Generate QR code (using compact ASCII mode with minimal margin)
+        qrencode -t ASCII -s 1 -m 0 "$AUTH_URL"
         echo ""
         
         # Wait for user input
