@@ -159,33 +159,49 @@ create_tunnel() {
     done
     
     # Ask for selection
-    read -p "Enter the number of the tunnel to delete: " SELECTION
+    read -p "Enter the numbers of the tunnels to delete (separated by spaces): " SELECTIONS
     
-    if ! [[ "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 1 ] || [ "$SELECTION" -gt "${#TUNNELS[@]}" ]; then
-        echo "Error: Invalid selection"
+    # Check if input is empty
+    if [ -z "$SELECTIONS" ]; then
+        echo "Error: No selection provided"
         return 1
     fi
     
-    # Get selected tunnel
-    selected_index=$((SELECTION-1))
-    selected_tunnel=${TUNNELS[$selected_index]}
-    tunnel_id=$(echo "$selected_tunnel" | awk '{print $1}')
+    # Convert selection string to array
+    IFS=' ' read -r -a SELECTION_ARRAY <<< "$SELECTIONS"
     
-    # Delete tunnel
-    echo "Deleting tunnel '$tunnel_id'..."
-    # Run delete command and capture both stdout and stderr
-    DELETE_RESULT=$(cloudflared tunnel delete $tunnel_id 2>&1)
+    # Validate selections and collect tunnel IDs
+    TUNNEL_IDS=()
+    for SELECTION in "${SELECTION_ARRAY[@]}"; do
+        if ! [[ "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 1 ] || [ "$SELECTION" -gt "${#TUNNELS[@]}" ]; then
+            echo "Error: Invalid selection: $SELECTION"
+            return 1
+        fi
+        
+        # Get selected tunnel
+        selected_index=$((SELECTION-1))
+        selected_tunnel=${TUNNELS[$selected_index]}
+        tunnel_id=$(echo "$selected_tunnel" | awk '{print $1}')
+        TUNNEL_IDS+=("$tunnel_id")
+    done
     
-    # Check exit code
-    if [ $? -eq 0 ]; then
-        echo "Successfully deleted tunnel"
-        echo "Delete result: $DELETE_RESULT"
-    else
-        echo "Error: Failed to delete tunnel"
-        echo "Error message: $DELETE_RESULT"
-        echo "Exit code: $?"
-        return 1
-    fi
+    # Delete each selected tunnel
+    for tunnel_id in "${TUNNEL_IDS[@]}"; do
+        echo ""
+        echo "Deleting tunnel '$tunnel_id'..."
+        # Run delete command and capture both stdout and stderr
+        DELETE_RESULT=$(cloudflared tunnel delete $tunnel_id 2>&1)
+        
+        # Check exit code
+        if [ $? -eq 0 ]; then
+            echo "Successfully deleted tunnel"
+            echo "Delete result: $DELETE_RESULT"
+        else
+            echo "Error: Failed to delete tunnel"
+            echo "Error message: $DELETE_RESULT"
+            echo "Exit code: $?"
+        fi
+    done
 }
 
 # Function to modify a Cloudflare Tunnel (delete and recreate)
@@ -249,7 +265,7 @@ modify_tunnel() {
     selected_index=$((SELECTION-1))
     selected_tunnel=${TUNNELS[$selected_index]}
     tunnel_id=$(echo "$selected_tunnel" | awk '{print $1}')
-    tunnel_name=$(echo "$selected_tunnel" | awk '{print $2}')
+    tunnel_name=$(echo "$selected_tunnel" | awk '{$1=""; print substr($0,2)}' | sed 's/[[:space:]]*$//')
     
     # Delete existing tunnel
     echo "Deleting existing tunnel '$tunnel_id'..."
