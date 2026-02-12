@@ -45,18 +45,24 @@ list_tunnels() {
     
     # Display tunnel list in formatted way
     echo ""
-    echo "ID                                   NAME              CREATED"
+    echo "No.  ID                                   Name"
     echo "---------------------------------------------------------------"
     
-    # Parse and display each tunnel
+    # Parse tunnels into array
+    TUNNELS=()
     while IFS= read -r line; do
         if echo "$line" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
-            tunnel_id=$(echo "$line" | awk '{print $1}')
-            tunnel_name=$(echo "$line" | awk '{print $2}')
-            tunnel_created=$(echo "$line" | awk '{print $3 " " $4 " " $5 " " $6 " " $7}')
-            printf "%s   %-16s   %s\n" "$tunnel_id" "$tunnel_name" "$tunnel_created"
+            TUNNELS+=($line)
         fi
     done <<< "$TUNNEL_LIST"
+    
+    # Display numbered list
+    for i in "${!TUNNELS[@]}"; do
+        index=$((i+1))
+        tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
+        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
+        printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
+    done
     
     echo ""
 }
@@ -137,12 +143,13 @@ create_tunnel() {
     done <<< "$TUNNEL_LIST"
     
     # Show numbered list
+    echo "No.  ID                                   Name"
+    echo "---------------------------------------------------------------"
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
         tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
-        echo "$index. ID: $tunnel_id"
-        echo "   Name: $tunnel_name"
+        printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
     done
     
     # Ask for selection
@@ -208,12 +215,13 @@ modify_tunnel() {
     done <<< "$TUNNEL_LIST"
     
     # Show numbered list
+    echo "No.  ID                                   Name"
+    echo "---------------------------------------------------------------"
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
         tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
-        echo "$index. ID: $tunnel_id"
-        echo "   Name: $tunnel_name"
+        printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
     done
     
     # Ask for selection
@@ -304,12 +312,13 @@ manage_dns() {
     done <<< "$TUNNEL_LIST"
     
     # Show numbered list
+    echo "No.  ID                                   Name"
+    echo "---------------------------------------------------------------"
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
         tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
-        echo "$index. ID: $tunnel_id"
-        echo "   Name: $tunnel_name"
+        printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
     done
     
     # Ask for selection
