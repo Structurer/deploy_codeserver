@@ -58,13 +58,13 @@ fi
 echo ""
 echo "2. 安装必要依赖..."
 check_and_handle_dpkg_lock
-apt install -y curl
+apt install -y curl qrencode
 
 echo ""
 echo "3. 安装 code Server..."
 curl -fsSL https://code-server.dev/install.sh | sh
 
-echo "" 
+echo ""
 echo "4. 配置 code Server..."
 
 # 密码输入循环，直到两次输入一致
@@ -116,69 +116,134 @@ check_and_handle_dpkg_lock
 dpkg -i cloudflared.deb
 rm -f cloudflared.deb
 
-echo "" 
+echo ""
 echo "7. Cloudflare 账户授权..."
-echo "请选择授权方式："
-echo "1. 在线授权（通过浏览器链接）"
-echo "2. 使用 API Token 授权"
-read -p "请输入选择 (1/2): " auth_method
-
-if [ "$auth_method" = "1" ]; then
-    # 在线授权方式
-    if [ -f "$HOME/.cloudflared/cert.pem" ]; then
-        echo "检测到已存在的 Cloudflare 证书，将覆盖现有证书"
+if [ -f "$HOME/.cloudflared/cert.pem" ]; then
+    echo "检测到已存在的 Cloudflare 证书"
+    echo "请选择操作："
+    echo "1. 使用现有证书"
+    echo "2. 重新授权（覆盖现有证书）"
+    read -p "请输入选择 (1/2): " cert_choice
+    
+    if [ "$cert_choice" = "2" ]; then
+        echo "正在删除现有证书..."
         rm -f "$HOME/.cloudflared/cert.pem"
-    fi
-    echo "请在浏览器中打开以下URL并登录Cloudflare账户授权："
-    echo "授权完成后，按回车键继续..."
-    cloudflared tunnel login
-elif [ "$auth_method" = "2" ]; then
-    # API Token 授权方式
-    echo "请输入 Cloudflare API Token："
-    read -s CLOUDFLARE_API_TOKEN
-    echo ""
-    
-    echo "正在使用 API Token 授权..."
-    
-    # 创建配置文件
-    mkdir -p "$HOME/.cloudflared"
-    cat > "$HOME/.cloudflared/config.yml" << EOF
-api_token: $CLOUDFLARE_API_TOKEN
-EOF
-    
-    # 尝试获取隧道列表验证授权，添加超时
-    echo "验证 API Token 有效性..."
-    # 使用超时机制，避免无限等待
-    if command -v timeout > /dev/null; then
-        TUNNEL_LIST=$(timeout 30s cloudflared tunnel list 2>&1)
-        TIMEOUT_STATUS=$?
+        # 检查 qrencode 是否安装
+        if ! command -v qrencode &> /dev/null; then
+            echo "安装 qrencode 用于生成二维码..."
+            apt update && apt install -y qrencode
+        fi
         
-        if [ "$TIMEOUT_STATUS" = "124" ]; then
-            echo "错误：验证超时，请检查网络连接"
-            # 清理配置文件
-            rm -f "$HOME/.cloudflared/config.yml"
-            exit 1
+        echo "=== Cloudflare 账户授权 ==="
+        echo "您可以使用以下任意一种方式进行授权："
+        echo "- 通过链接授权：复制下面的链接到浏览器中打开"
+        echo "- 通过二维码授权：使用手机相机扫描下面的二维码"
+        echo ""
+        
+        # 在后台运行授权命令，捕获输出
+        cloudflared tunnel login > /tmp/auth_output.txt 2>&1 &
+        
+        # 保存后台进程的 PID
+        AUTH_PID=$!
+        
+        # 等待几秒钟，确保命令已经生成授权 URL
+        echo "生成授权 URL..."
+        sleep 3
+        
+        # 从输出文件中提取授权 URL
+        AUTH_URL=$(grep -o "https://dash.cloudflare.com/argotunnel.*" /tmp/auth_output.txt)
+        
+        if [ -n "$AUTH_URL" ]; then
+            echo ""
+            echo "=== 方式 1: 通过链接授权 ==="
+            echo "授权 URL:"
+            echo "$AUTH_URL"
+            echo ""
+            echo "=== 方式 2: 通过二维码授权 ==="
+            echo "请使用手机相机扫描下面的二维码:"
+            echo ""
+            
+            # 生成二维码（使用方块字符）
+            qrencode -t ASCIIi -s 1 "$AUTH_URL"
+            
+            echo ""
+            echo "=== 授权说明 ==="
+            echo "1. 选择上述任意一种授权方式"
+            echo "2. 在浏览器中登录 Cloudflare 账户"
+            echo "3. 点击 'Authorize' 按钮完成授权"
+            echo "4. 授权成功后，按回车键继续"
+            echo ""
+            
+            # 等待用户输入
+            read -p "授权完成后，按回车键继续: "
+            
+            # 等待后台的授权进程完成
+            wait $AUTH_PID 2>/dev/null
+        else
+            echo "无法获取授权 URL，直接执行授权命令..."
+            # 直接执行授权命令
+            cloudflared tunnel login
         fi
     else
-        # 如果没有 timeout 命令，直接执行
-        TUNNEL_LIST=$(cloudflared tunnel list 2>&1)
-    fi
-    
-    if echo "$TUNNEL_LIST" | grep -q "error"; then
-        echo "错误：API Token 验证失败，请检查 Token 是否正确"
-        echo "错误信息：$TUNNEL_LIST"
-        # 清理配置文件
-        rm -f "$HOME/.cloudflared/config.yml"
-        exit 1
-    else
-        echo "API Token 授权成功！"
-        # 清理配置文件，因为我们只需要验证 Token
-        rm -f "$HOME/.cloudflared/config.yml"
-        echo "授权完成！"
+        echo "使用现有证书"
     fi
 else
-    echo "错误：无效的选择，请重新执行脚本"
-    exit 1
+    # 检查 qrencode 是否安装
+    if ! command -v qrencode &> /dev/null; then
+        echo "安装 qrencode 用于生成二维码..."
+        apt update && apt install -y qrencode
+    fi
+    
+    echo "=== Cloudflare 账户授权 ==="
+    echo "您可以使用以下任意一种方式进行授权："
+    echo "- 通过链接授权：复制下面的链接到浏览器中打开"
+    echo "- 通过二维码授权：使用手机相机扫描下面的二维码"
+    echo ""
+    
+    # 在后台运行授权命令，捕获输出
+    cloudflared tunnel login > /tmp/auth_output.txt 2>&1 &
+    
+    # 保存后台进程的 PID
+    AUTH_PID=$!
+    
+    # 等待几秒钟，确保命令已经生成授权 URL
+    echo "生成授权 URL..."
+    sleep 3
+    
+    # 从输出文件中提取授权 URL
+    AUTH_URL=$(grep -o "https://dash.cloudflare.com/argotunnel.*" /tmp/auth_output.txt)
+    
+    if [ -n "$AUTH_URL" ]; then
+        echo ""
+        echo "=== 方式 1: 通过链接授权 ==="
+        echo "授权 URL:"
+        echo "$AUTH_URL"
+        echo ""
+        echo "=== 方式 2: 通过二维码授权 ==="
+        echo "请使用手机相机扫描下面的二维码:"
+        echo ""
+        
+        # 生成二维码（使用方块字符）
+        qrencode -t ASCIIi -s 1 "$AUTH_URL"
+        
+        echo ""
+        echo "=== 授权说明 ==="
+        echo "1. 选择上述任意一种授权方式"
+        echo "2. 在浏览器中登录 Cloudflare 账户"
+        echo "3. 点击 'Authorize' 按钮完成授权"
+        echo "4. 授权成功后，按回车键继续"
+        echo ""
+        
+        # 等待用户输入
+        read -p "授权完成后，按回车键继续: "
+        
+        # 等待后台的授权进程完成
+        wait $AUTH_PID 2>/dev/null
+    else
+        echo "无法获取授权 URL，直接执行授权命令..."
+        # 直接执行授权命令
+        cloudflared tunnel login
+    fi
 fi
 
 echo ""
@@ -367,10 +432,10 @@ if [ -z "$TUNNEL_ID" ] && echo "$TUNNEL_CREATION_OUTPUT" | grep -q "tunnel with 
         fi
         echo "创建名为 $NEW_TUNNEL_NAME 的 tunnel..."
         TUNNEL_CREATION_OUTPUT=$(cloudflared tunnel create $NEW_TUNNEL_NAME 2>&1 || echo "命令执行失败: $?")
-        echo "创建命令输出: $TUNNEL_CREATION_OUTPUT"
+echo "创建命令输出: $TUNNEL_CREATION_OUTPUT"
         
         TUNNEL_ID=$(echo "$TUNNEL_CREATION_OUTPUT" | grep "Created tunnel" | grep "with id" | awk -F 'id ' '{print $2}' | tr -d '\n')
-        echo "提取到的 Tunnel ID: '$TUNNEL_ID'"
+echo "提取到的 Tunnel ID: '$TUNNEL_ID'"
         
         if [[ "$TUNNEL_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
             TUNNEL_NAME="$NEW_TUNNEL_NAME"
