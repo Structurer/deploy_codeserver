@@ -35,10 +35,6 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codese
 ```
 
 
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codeserver/main/cloudflare_tunnel_manager.sh)"
-```
-
 
 
 #### 常用命令
