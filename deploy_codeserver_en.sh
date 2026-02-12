@@ -140,6 +140,13 @@ if [ -f "$HOME/.cloudflared/cert.pem" ]; then
         echo "- Authorize via QR code: Use your phone camera to scan the QR code below"
         echo ""
         
+        echo "=== Authorization Instructions ==="
+        echo "1. Select any of the above authorization methods"
+        echo "2. Log in to your Cloudflare account in the browser"
+        echo "3. Click the 'Authorize' button to complete authorization"
+        echo "4. After successful authorization, press Enter to continue"
+        echo ""
+        
         # Run authorization command in background, capture output
         cloudflared tunnel login > /tmp/auth_output.txt 2>&1 &
         
@@ -165,13 +172,6 @@ if [ -f "$HOME/.cloudflared/cert.pem" ]; then
             
             # Generate QR code (using compact ASCII mode)
             qrencode -t ASCII -s 1 "$AUTH_URL"
-            
-            echo ""
-            echo "=== Authorization Instructions ==="
-            echo "1. Select any of the above authorization methods"
-            echo "2. Log in to your Cloudflare account in the browser"
-            echo "3. Click the 'Authorize' button to complete authorization"
-            echo "4. After successful authorization, press Enter to continue"
             echo ""
             
             # Wait for user input
@@ -200,6 +200,13 @@ else
     echo "- Authorize via QR code: Use your phone camera to scan the QR code below"
     echo ""
     
+    echo "=== Authorization Instructions ==="
+    echo "1. Select any of the above authorization methods"
+    echo "2. Log in to your Cloudflare account in the browser"
+    echo "3. Click the 'Authorize' button to complete authorization"
+    echo "4. After successful authorization, press Enter to continue"
+    echo ""
+    
     # Run authorization command in background, capture output
     cloudflared tunnel login > /tmp/auth_output.txt 2>&1 &
     
@@ -225,13 +232,6 @@ else
         
         # Generate QR code (using compact ASCII mode)
         qrencode -t ASCII -s 1 "$AUTH_URL"
-        
-        echo ""
-        echo "=== Authorization Instructions ==="
-        echo "1. Select any of the above authorization methods"
-        echo "2. Log in to your Cloudflare account in the browser"
-        echo "3. Click the 'Authorize' button to complete authorization"
-        echo "4. After successful authorization, press Enter to continue"
         echo ""
         
         # Wait for user input
