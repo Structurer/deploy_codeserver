@@ -35,6 +35,20 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codese
 ```
 
 
+#### 常用命令
+
+
+* 清楚原纪录
+```bash
+ssh-keygen -R ip
+```
+
+
+
+
+
+
+
 ## 执行流程
 
 1. **系统准备**
