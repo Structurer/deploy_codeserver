@@ -52,15 +52,18 @@ list_tunnels() {
     TUNNELS=()
     while IFS= read -r line; do
         if echo "$line" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
-            TUNNELS+=($line)
+            # Store the entire line as a single array element
+            TUNNELS+=("$line")
         fi
     done <<< "$TUNNEL_LIST"
     
     # Display numbered list
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
+        # Extract tunnel ID (first field)
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
-        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
+        # Extract tunnel name (all fields after the first)
+        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}' | sed 's/[[:space:]]*$//')
         printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
     done
     
@@ -138,7 +141,8 @@ create_tunnel() {
     TUNNELS=()
     while IFS= read -r line; do
         if echo "$line" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
-            TUNNELS+=($line)
+            # Store the entire line as a single array element
+            TUNNELS+=("$line")
         fi
     done <<< "$TUNNEL_LIST"
     
@@ -147,8 +151,10 @@ create_tunnel() {
     echo "---------------------------------------------------------------"
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
+        # Extract tunnel ID (first field)
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
-        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
+        # Extract tunnel name (all fields after the first)
+        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}' | sed 's/[[:space:]]*$//')
         printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
     done
     
@@ -210,7 +216,8 @@ modify_tunnel() {
     TUNNELS=()
     while IFS= read -r line; do
         if echo "$line" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
-            TUNNELS+=($line)
+            # Store the entire line as a single array element
+            TUNNELS+=("$line")
         fi
     done <<< "$TUNNEL_LIST"
     
@@ -219,8 +226,10 @@ modify_tunnel() {
     echo "---------------------------------------------------------------"
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
+        # Extract tunnel ID (first field)
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
-        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
+        # Extract tunnel name (all fields after the first)
+        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}' | sed 's/[[:space:]]*$//')
         printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
     done
     
@@ -307,7 +316,8 @@ manage_dns() {
     TUNNELS=()
     while IFS= read -r line; do
         if echo "$line" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
-            TUNNELS+=($line)
+            # Store the entire line as a single array element
+            TUNNELS+=("$line")
         fi
     done <<< "$TUNNEL_LIST"
     
@@ -316,8 +326,10 @@ manage_dns() {
     echo "---------------------------------------------------------------"
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
+        # Extract tunnel ID (first field)
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
-        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
+        # Extract tunnel name (all fields after the first)
+        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}' | sed 's/[[:space:]]*$//')
         printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
     done
     
