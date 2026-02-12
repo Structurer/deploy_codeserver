@@ -52,7 +52,10 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codese
 ```
 
 
-
+* 提权
+```bash
+sudo -i
+```
 
 
 ## 执行流程
