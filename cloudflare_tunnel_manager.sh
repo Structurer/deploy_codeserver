@@ -45,8 +45,8 @@ list_tunnels() {
     
     # Display tunnel list in formatted way
     echo ""
-    echo "No.  ID                                   Name"
-    echo "---------------------------------------------------------------"
+    echo "No.  ID                                   Name                                  Created"
+    echo "-------------------------------------------------------------------------------"
     
     # Parse tunnels into array
     TUNNELS=()
@@ -62,9 +62,14 @@ list_tunnels() {
         index=$((i+1))
         # Extract tunnel ID (first field)
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
-        # Extract tunnel name (all fields after the first)
-        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}' | sed 's/[[:space:]]*$//')
-        printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
+        # Extract tunnel name and created date
+        # First, get the entire line except the first field
+        rest=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}')
+        # Extract created date (last field)
+        created_date=$(echo "$rest" | awk '{print $NF}')
+        # Extract tunnel name (all fields except the last)
+        tunnel_name=$(echo "$rest" | awk '{$NF=""; print substr($0,1,40)}' | sed 's/[[:space:]]*$//')
+        printf "%2d   %-36s %-40s %s\n" "$index" "$tunnel_id" "$tunnel_name" "$created_date"
     done
     
     echo ""
@@ -147,15 +152,20 @@ create_tunnel() {
     done <<< "$TUNNEL_LIST"
     
     # Show numbered list
-    echo "No.  ID                                   Name"
-    echo "---------------------------------------------------------------"
+    echo "No.  ID                                   Name                                  Created"
+    echo "-------------------------------------------------------------------------------"
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
         # Extract tunnel ID (first field)
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
-        # Extract tunnel name (all fields after the first)
-        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}' | sed 's/[[:space:]]*$//')
-        printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
+        # Extract tunnel name and created date
+        # First, get the entire line except the first field
+        rest=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}')
+        # Extract created date (last field)
+        created_date=$(echo "$rest" | awk '{print $NF}')
+        # Extract tunnel name (all fields except the last)
+        tunnel_name=$(echo "$rest" | awk '{$NF=""; print substr($0,1,40)}' | sed 's/[[:space:]]*$//')
+        printf "%2d   %-36s %-40s %s\n" "$index" "$tunnel_id" "$tunnel_name" "$created_date"
     done
     
     # Ask for selection
@@ -242,15 +252,20 @@ modify_tunnel() {
     done <<< "$TUNNEL_LIST"
     
     # Show numbered list
-    echo "No.  ID                                   Name"
-    echo "---------------------------------------------------------------"
+    echo "No.  ID                                   Name                                  Created"
+    echo "-------------------------------------------------------------------------------"
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
         # Extract tunnel ID (first field)
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
-        # Extract tunnel name (all fields after the first)
-        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}' | sed 's/[[:space:]]*$//')
-        printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
+        # Extract tunnel name and created date
+        # First, get the entire line except the first field
+        rest=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}')
+        # Extract created date (last field)
+        created_date=$(echo "$rest" | awk '{print $NF}')
+        # Extract tunnel name (all fields except the last)
+        tunnel_name=$(echo "$rest" | awk '{$NF=""; print substr($0,1,40)}' | sed 's/[[:space:]]*$//')
+        printf "%2d   %-36s %-40s %s\n" "$index" "$tunnel_id" "$tunnel_name" "$created_date"
     done
     
     # Ask for selection
@@ -347,15 +362,20 @@ manage_dns() {
     done <<< "$TUNNEL_LIST"
     
     # Show numbered list
-    echo "No.  ID                                   Name"
-    echo "---------------------------------------------------------------"
+    echo "No.  ID                                   Name                                  Created"
+    echo "-------------------------------------------------------------------------------"
     for i in "${!TUNNELS[@]}"; do
         index=$((i+1))
         # Extract tunnel ID (first field)
         tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
-        # Extract tunnel name (all fields after the first)
-        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}' | sed 's/[[:space:]]*$//')
-        printf "%2d   %-36s %s\n" "$index" "$tunnel_id" "$tunnel_name"
+        # Extract tunnel name and created date
+        # First, get the entire line except the first field
+        rest=$(echo "${TUNNELS[$i]}" | awk '{$1=""; print substr($0,2)}')
+        # Extract created date (last field)
+        created_date=$(echo "$rest" | awk '{print $NF}')
+        # Extract tunnel name (all fields except the last)
+        tunnel_name=$(echo "$rest" | awk '{$NF=""; print substr($0,1,40)}' | sed 's/[[:space:]]*$//')
+        printf "%2d   %-36s %-40s %s\n" "$index" "$tunnel_id" "$tunnel_name" "$created_date"
     done
     
     # Ask for selection
