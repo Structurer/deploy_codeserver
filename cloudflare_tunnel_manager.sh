@@ -173,13 +173,17 @@ create_tunnel() {
     
     # Delete tunnel
     echo "Deleting tunnel '$tunnel_id'..."
+    # Run delete command and capture both stdout and stderr
     DELETE_RESULT=$(cloudflared tunnel delete $tunnel_id 2>&1)
     
-    if echo "$DELETE_RESULT" | grep -q "deleted tunnel"; then
+    # Check exit code
+    if [ $? -eq 0 ]; then
         echo "Successfully deleted tunnel"
+        echo "Delete result: $DELETE_RESULT"
     else
         echo "Error: Failed to delete tunnel"
         echo "Error message: $DELETE_RESULT"
+        echo "Exit code: $?"
         return 1
     fi
 }
@@ -249,13 +253,18 @@ modify_tunnel() {
     
     # Delete existing tunnel
     echo "Deleting existing tunnel '$tunnel_id'..."
+    # Run delete command and capture both stdout and stderr
     DELETE_RESULT=$(cloudflared tunnel delete $tunnel_id 2>&1)
     
-    if ! echo "$DELETE_RESULT" | grep -q "deleted tunnel"; then
+    # Check exit code
+    if [ $? -ne 0 ]; then
         echo "Error: Failed to delete existing tunnel"
         echo "Error message: $DELETE_RESULT"
+        echo "Exit code: $?"
         return 1
     fi
+    
+    echo "Delete result: $DELETE_RESULT"
     
     # Use the same name for the new tunnel
     TUNNEL_NAME="$tunnel_name"
