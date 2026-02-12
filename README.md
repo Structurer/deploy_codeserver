@@ -38,9 +38,9 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/Structurer/deploy_codese
 #### 常用命令
 
 
-* 清楚原纪录
+* ssh-keygen
 ```bash
-ssh-keygen -R ip
+ssh-keygen -R example_ip
 ```
 
 
