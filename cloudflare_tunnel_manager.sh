@@ -108,20 +108,59 @@ create_tunnel() {
     # Check authorization first
     check_authorization || return 1
     
-    # List existing tunnels
-    list_tunnels
+    # Get tunnel list
+    TUNNEL_LIST=$(cloudflared tunnel list 2>&1)
     
-    # Ask for tunnel ID or name
-    read -p "Enter tunnel ID or name to delete: " TUNNEL_ID_OR_NAME
-    
-    if [ -z "$TUNNEL_ID_OR_NAME" ]; then
-        echo "Error: Tunnel ID or name cannot be empty"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to get tunnel list"
+        echo "Error message: $TUNNEL_LIST"
         return 1
     fi
     
+    # Check if there are any tunnels
+    if ! echo "$TUNNEL_LIST" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
+        echo "No existing tunnels found"
+        return 0
+    fi
+    
+    # Display tunnels with numbers
+    echo ""
+    echo "Existing tunnels:"
+    echo "-----------------"
+    
+    # Parse tunnels into array
+    TUNNELS=()
+    while IFS= read -r line; do
+        if echo "$line" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
+            TUNNELS+=($line)
+        fi
+    done <<< "$TUNNEL_LIST"
+    
+    # Show numbered list
+    for i in "${!TUNNELS[@]}"; do
+        index=$((i+1))
+        tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
+        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
+        echo "$index. ID: $tunnel_id"
+        echo "   Name: $tunnel_name"
+    done
+    
+    # Ask for selection
+    read -p "Enter the number of the tunnel to delete: " SELECTION
+    
+    if ! [[ "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 1 ] || [ "$SELECTION" -gt "${#TUNNELS[@]}" ]; then
+        echo "Error: Invalid selection"
+        return 1
+    fi
+    
+    # Get selected tunnel
+    selected_index=$((SELECTION-1))
+    selected_tunnel=${TUNNELS[$selected_index]}
+    tunnel_id=$(echo "$selected_tunnel" | awk '{print $1}')
+    
     # Delete tunnel
-    echo "Deleting tunnel '$TUNNEL_ID_OR_NAME'..."
-    DELETE_RESULT=$(cloudflared tunnel delete $TUNNEL_ID_OR_NAME 2>&1)
+    echo "Deleting tunnel '$tunnel_id'..."
+    DELETE_RESULT=$(cloudflared tunnel delete $tunnel_id 2>&1)
     
     if echo "$DELETE_RESULT" | grep -q "deleted tunnel"; then
         echo "Successfully deleted tunnel"
@@ -140,20 +179,60 @@ modify_tunnel() {
     # Check authorization first
     check_authorization || return 1
     
-    # List existing tunnels
-    list_tunnels
+    # Get tunnel list
+    TUNNEL_LIST=$(cloudflared tunnel list 2>&1)
     
-    # Ask for tunnel ID or name to modify
-    read -p "Enter tunnel ID or name to modify: " TUNNEL_ID_OR_NAME
-    
-    if [ -z "$TUNNEL_ID_OR_NAME" ]; then
-        echo "Error: Tunnel ID or name cannot be empty"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to get tunnel list"
+        echo "Error message: $TUNNEL_LIST"
         return 1
     fi
     
+    # Check if there are any tunnels
+    if ! echo "$TUNNEL_LIST" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
+        echo "No existing tunnels found"
+        return 0
+    fi
+    
+    # Display tunnels with numbers
+    echo ""
+    echo "Existing tunnels:"
+    echo "-----------------"
+    
+    # Parse tunnels into array
+    TUNNELS=()
+    while IFS= read -r line; do
+        if echo "$line" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
+            TUNNELS+=($line)
+        fi
+    done <<< "$TUNNEL_LIST"
+    
+    # Show numbered list
+    for i in "${!TUNNELS[@]}"; do
+        index=$((i+1))
+        tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
+        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
+        echo "$index. ID: $tunnel_id"
+        echo "   Name: $tunnel_name"
+    done
+    
+    # Ask for selection
+    read -p "Enter the number of the tunnel to modify: " SELECTION
+    
+    if ! [[ "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 1 ] || [ "$SELECTION" -gt "${#TUNNELS[@]}" ]; then
+        echo "Error: Invalid selection"
+        return 1
+    fi
+    
+    # Get selected tunnel
+    selected_index=$((SELECTION-1))
+    selected_tunnel=${TUNNELS[$selected_index]}
+    tunnel_id=$(echo "$selected_tunnel" | awk '{print $1}')
+    tunnel_name=$(echo "$selected_tunnel" | awk '{print $2}')
+    
     # Delete existing tunnel
-    echo "Deleting existing tunnel '$TUNNEL_ID_OR_NAME'..."
-    DELETE_RESULT=$(cloudflared tunnel delete $TUNNEL_ID_OR_NAME 2>&1)
+    echo "Deleting existing tunnel '$tunnel_id'..."
+    DELETE_RESULT=$(cloudflared tunnel delete $tunnel_id 2>&1)
     
     if ! echo "$DELETE_RESULT" | grep -q "deleted tunnel"; then
         echo "Error: Failed to delete existing tunnel"
@@ -161,8 +240,8 @@ modify_tunnel() {
         return 1
     fi
     
-    # Get tunnel name from ID or use the same name
-    TUNNEL_NAME="$TUNNEL_ID_OR_NAME"
+    # Use the same name for the new tunnel
+    TUNNEL_NAME="$tunnel_name"
     
     # Recreate tunnel with the same name
     echo "Recreating tunnel '$TUNNEL_NAME'..."
@@ -196,16 +275,55 @@ manage_dns() {
     # Check authorization first
     check_authorization || return 1
     
-    # List existing tunnels
-    list_tunnels
+    # Get tunnel list
+    TUNNEL_LIST=$(cloudflared tunnel list 2>&1)
     
-    # Ask for tunnel ID or name
-    read -p "Enter tunnel ID or name to manage DNS records: " TUNNEL_ID_OR_NAME
-    
-    if [ -z "$TUNNEL_ID_OR_NAME" ]; then
-        echo "Error: Tunnel ID or name cannot be empty"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to get tunnel list"
+        echo "Error message: $TUNNEL_LIST"
         return 1
     fi
+    
+    # Check if there are any tunnels
+    if ! echo "$TUNNEL_LIST" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
+        echo "No existing tunnels found"
+        return 0
+    fi
+    
+    # Display tunnels with numbers
+    echo ""
+    echo "Existing tunnels:"
+    echo "-----------------"
+    
+    # Parse tunnels into array
+    TUNNELS=()
+    while IFS= read -r line; do
+        if echo "$line" | grep -q -E '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'; then
+            TUNNELS+=($line)
+        fi
+    done <<< "$TUNNEL_LIST"
+    
+    # Show numbered list
+    for i in "${!TUNNELS[@]}"; do
+        index=$((i+1))
+        tunnel_id=$(echo "${TUNNELS[$i]}" | awk '{print $1}')
+        tunnel_name=$(echo "${TUNNELS[$i]}" | awk '{print $2}')
+        echo "$index. ID: $tunnel_id"
+        echo "   Name: $tunnel_name"
+    done
+    
+    # Ask for selection
+    read -p "Enter the number of the tunnel to manage DNS records: " SELECTION
+    
+    if ! [[ "$SELECTION" =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 1 ] || [ "$SELECTION" -gt "${#TUNNELS[@]}" ]; then
+        echo "Error: Invalid selection"
+        return 1
+    fi
+    
+    # Get selected tunnel
+    selected_index=$((SELECTION-1))
+    selected_tunnel=${TUNNELS[$selected_index]}
+    tunnel_id=$(echo "$selected_tunnel" | awk '{print $1}')
     
     # Ask for domain
     read -p "Enter domain to associate with tunnel (e.g., code.example.com): " DOMAIN
@@ -216,8 +334,8 @@ manage_dns() {
     fi
     
     # Associate domain with tunnel
-    echo "Associating domain '$DOMAIN' with tunnel '$TUNNEL_ID_OR_NAME'..."
-    BIND_RESULT=$(cloudflared tunnel route dns $TUNNEL_ID_OR_NAME $DOMAIN 2>&1)
+    echo "Associating domain '$DOMAIN' with tunnel '$tunnel_id'..."
+    BIND_RESULT=$(cloudflared tunnel route dns $tunnel_id $DOMAIN 2>&1)
     
     if echo "$BIND_RESULT" | grep -q "Successfully added DNS record"; then
         echo "Successfully associated domain with tunnel"
