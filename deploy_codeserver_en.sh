@@ -163,8 +163,8 @@ if [ -f "$HOME/.cloudflared/cert.pem" ]; then
             echo "Please use your phone camera to scan the QR code below:"
             echo ""
             
-            # Generate QR code (using block characters)
-            qrencode -t ASCIIi -s 1 "$AUTH_URL"
+            # Generate QR code (using compact ASCII mode)
+            qrencode -t ASCII -s 1 "$AUTH_URL"
             
             echo ""
             echo "=== Authorization Instructions ==="
@@ -223,8 +223,8 @@ else
         echo "Please use your phone camera to scan the QR code below:"
         echo ""
         
-        # Generate QR code (using block characters)
-        qrencode -t ASCIIi -s 1 "$AUTH_URL"
+        # Generate QR code (using compact ASCII mode)
+        qrencode -t ASCII -s 1 "$AUTH_URL"
         
         echo ""
         echo "=== Authorization Instructions ==="
