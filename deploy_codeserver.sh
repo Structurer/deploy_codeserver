@@ -140,6 +140,13 @@ if [ -f "$HOME/.cloudflared/cert.pem" ]; then
         echo "- 通过二维码授权：使用手机相机扫描下面的二维码"
         echo ""
         
+        echo "=== 授权说明 ==="
+        echo "1. 选择下述任意一种授权方式"
+        echo "2. 在浏览器中登录 Cloudflare 账户"
+        echo "3. 点击 'Authorize' 按钮完成授权"
+        echo "4. 授权成功后，按回车键继续"
+        echo ""
+        
         # 在后台运行授权命令，捕获输出
         cloudflared tunnel login > /tmp/auth_output.txt 2>&1 &
         
@@ -163,15 +170,8 @@ if [ -f "$HOME/.cloudflared/cert.pem" ]; then
             echo "请使用手机相机扫描下面的二维码:"
             echo ""
             
-            # 生成二维码（使用方块字符）
-            qrencode -t ASCIIi -s 1 "$AUTH_URL"
-            
-            echo ""
-            echo "=== 授权说明 ==="
-            echo "1. 选择上述任意一种授权方式"
-            echo "2. 在浏览器中登录 Cloudflare 账户"
-            echo "3. 点击 'Authorize' 按钮完成授权"
-            echo "4. 授权成功后，按回车键继续"
+            # 生成二维码（使用紧凑ASCII模式，最小边距）
+            qrencode -t ASCII -s 1 -m 0 "$AUTH_URL"
             echo ""
             
             # 等待用户输入
@@ -200,6 +200,13 @@ else
     echo "- 通过二维码授权：使用手机相机扫描下面的二维码"
     echo ""
     
+    echo "=== 授权说明 ==="
+    echo "1. 选择下述任意一种授权方式"
+    echo "2. 在浏览器中登录 Cloudflare 账户"
+    echo "3. 点击 'Authorize' 按钮完成授权"
+    echo "4. 授权成功后，按回车键继续"
+    echo ""
+    
     # 在后台运行授权命令，捕获输出
     cloudflared tunnel login > /tmp/auth_output.txt 2>&1 &
     
@@ -223,15 +230,8 @@ else
         echo "请使用手机相机扫描下面的二维码:"
         echo ""
         
-        # 生成二维码（使用方块字符）
-        qrencode -t ASCIIi -s 1 "$AUTH_URL"
-        
-        echo ""
-        echo "=== 授权说明 ==="
-        echo "1. 选择上述任意一种授权方式"
-        echo "2. 在浏览器中登录 Cloudflare 账户"
-        echo "3. 点击 'Authorize' 按钮完成授权"
-        echo "4. 授权成功后，按回车键继续"
+        # 生成二维码（使用紧凑ASCII模式，最小边距）
+            qrencode -t ASCII -s 1 -m 0 "$AUTH_URL"
         echo ""
         
         # 等待用户输入
